@@ -71,6 +71,16 @@
     <string name="reason_R6_new_payee_typed">You typed this UPI ID by hand and have never paid it before</string>
     <string name="reason_R7_tranche_pattern">You are making several payments in a short time</string>
     <string name="reason_R8_intel_hit">This account or number has been reported for fraud</string>
+    <string name="reason_R9_story_mismatch">This account belongs to a private person, not who you said you are paying</string>
+
+    <!-- Who are you paying? (contract field payer_says) -->
+    <string name="payer_question">Who are you paying? (optional)</string>
+    <string name="payer_family">Family or friend</string>
+    <string name="payer_shop">Shop</string>
+    <string name="payer_company">Company</string>
+    <string name="payer_government">Government</string>
+    <string name="payer_investment">Investment</string>
+    <string name="payer_other">Someone else</string>
 
     <!-- Welcome and sign up -->
     <string name="welcome_title">Welcome to Cache Pay</string>

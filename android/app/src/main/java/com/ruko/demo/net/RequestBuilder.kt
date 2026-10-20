@@ -4,8 +4,9 @@ import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import java.util.UUID
 
-/** Builds the one request the phone sends on Pay. Never put raw text, numbers or names in it. */
+/** Builds the one request the phone sends on Pay. Only derived flags go in `context`. */
 object RequestBuilder {
 
     private val IST: ZoneOffset = ZoneOffset.ofHoursMinutes(5, 30)
@@ -20,17 +21,19 @@ object RequestBuilder {
         userId: String,
         upiId: String,
         amountInr: Double,
-        typedManually: Boolean,
+        entryMethod: EntryMethod,
         context: Context?,
-        lureTags: List<LureTag> = emptyList(),
+        payerSays: PayerSays? = null,
         ts: String = nowIst(),
+        requestId: String = UUID.randomUUID().toString(),
     ): DecideRequest = DecideRequest(
+        requestId = requestId,
         userId = userId,
-        payeeVpaHash = payeeHash(upiId),
+        payeeUpiId = upiId.trim().lowercase(),
         amountInr = amountInr,
+        entryMethod = entryMethod,
+        payerSays = payerSays,
         ts = ts,
         context = context,
-        lureTags = lureTags,
-        payeeTypedManually = typedManually,
     )
 }

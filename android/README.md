@@ -1,15 +1,15 @@
 # android: Manjeet Singh (Android app)
 
-The phone part of RUKO (zone 1). Branches: `android/*`. Kotlin, Jetpack Compose, Retrofit and kotlinx.serialization.
-It is a demo only: no real money moves.
+Cache Pay, the phone part of RUKO (zone 1). Branches: `android/*`. Kotlin, Jetpack Compose,
+Retrofit and kotlinx.serialization. It is a demo only: no real money moves.
 
 ## Run it
 
 1. Open this `android` folder in Android Studio and let Gradle sync.
-2. In `local.properties`, set `PAYEE_SALT` to the same value as the backend `.env` (ask Jagdeep).
+2. Start the backend on the laptop (see `backend/README.md`).
 3. Plug in the phone with USB debugging on, then forward the API port:
    `adb reverse tcp:8000 tcp:8000`
-4. Press Run. On the home screen, "Check server" calls `GET /health`.
+4. Press Run, sign up, and tap "Check Scam Shield" on Home to call `GET /health`.
 
 From the command line: `./gradlew assembleDebug testDebugUnitTest`
 
@@ -17,15 +17,22 @@ From the command line: `./gradlew assembleDebug testDebugUnitTest`
 
 | Area | Files |
 |---|---|
-| Request models (mirror `schema/events.py`) | `net/Models.kt` |
-| Payee hash (must equal the Python one) | `net/PayeeHash.kt` |
-| Request builder (IST timestamps) | `net/RequestBuilder.kt` |
+| Request and response models, contract **c2-0.1** (`contracts/`) | `net/Models.kt` |
+| Request builder (IST timestamps, request id) | `net/RequestBuilder.kt` |
 | Retrofit client, 1 s timeout, fail open | `net/RukoApi.kt` |
-| Home, Pay, decision, PIN, Success | `ui/` |
-| Contract tests | `app/src/test/.../ContractTest.kt` |
+| Phone signals: calls, contacts, apps, screen recording | `signals/ContextSensor.kt` |
+| Mapping to the nested `context` (call, device, lures) | `signals/PhoneSignals.kt` |
+| Lure scorer on recent SMS, `assets/lure.json` or keywords | `signals/LureScorer.kt`, `signals/Signals.kt` |
+| Sign up, login, encrypted account storage | `ui/auth/`, `data/` |
+| Home, Pay, decision, PIN, Success, debug panel | `ui/` |
+| Contract tests against `contracts/` | `app/src/test/.../ContractTest.kt` |
 
-## Not built yet (guide steps 6 to 9)
+Privacy rules the phone follows on top of the contract:
+- `caller_number` is sent only for an incoming SIM call from a number not in contacts.
+- `remote_access_active` is true only when a remote access app is installed and the screen is being
+  captured (Android 15+); false when nothing captures the screen; null before Android 15.
+- Account details never leave the phone.
 
-Consent screen, ContextSensor (the request sends `"context": null` until then), debug panel,
-the T1 to T4 alert screens, feedback calls, the lure scorer and Hindi strings.
-`DecideResponse` field names are a guess until Jagdeep publishes `schema/events.py`.
+## Not built yet (guide steps 7 to 9)
+
+The T1 to T4 alert screens, feedback calls and Hindi strings.

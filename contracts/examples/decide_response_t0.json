@@ -1,0 +1,12 @@
+{
+  "request_id": "0b6e4d2f-8c1a-4f3e-b7d9-5a2c1e8f0d47",
+  "tier": "T0",
+  "reasons": [],
+  "message_key": null,
+  "pause_minutes": 0,
+  "playbook": null,
+  "stage": "S0",
+  "evidence_id": null,
+  "fail_open": false,
+  "contract_version": "c2-0.1"
+}

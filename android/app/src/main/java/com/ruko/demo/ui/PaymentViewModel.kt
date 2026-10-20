@@ -9,13 +9,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ruko.demo.DemoConfig
 import com.ruko.demo.data.Consents
-import com.ruko.demo.signals.Signals
 import com.ruko.demo.net.ApiClient
 import com.ruko.demo.net.DecideRequest
 import com.ruko.demo.net.DecideResponse
+import com.ruko.demo.net.EntryMethod
+import com.ruko.demo.net.PayerSays
 import com.ruko.demo.net.RequestBuilder
 import com.ruko.demo.net.RukoApi
 import com.ruko.demo.net.RukoJson
+import com.ruko.demo.signals.Signals
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -24,7 +26,7 @@ import kotlinx.coroutines.withContext
 sealed interface Decision {
     data class Result(val response: DecideResponse, val millis: Long) : Decision
 
-    /** The server was slow, down or answered badly. The payment proceeds (fail open). */
+    /** The server was slow, down, refused the request or said it could not decide. The payment proceeds. */
     data object Unavailable : Decision
 }
 
@@ -33,8 +35,11 @@ class PaymentViewModel(private val api: RukoApi = ApiClient.api) : ViewModel() {
     var upiId by mutableStateOf("")
     var amountText by mutableStateOf("")
 
-    // True when the UPI ID was typed, false when it was picked from saved payees.
-    var typedManually by mutableStateOf(true)
+    // TYPED when the UPI ID was typed, CONTACT when it was picked from saved payees.
+    var entryMethod by mutableStateOf(EntryMethod.TYPED)
+
+    // Optional answer to "Who are you paying?" for a new payee.
+    var payerSays by mutableStateOf<PayerSays?>(null)
 
     // The user's current Scam Shield switches, kept in sync by the app from the account.
     var consents by mutableStateOf(Consents())
@@ -50,7 +55,7 @@ class PaymentViewModel(private val api: RukoApi = ApiClient.api) : ViewModel() {
     var serverStatus by mutableStateOf<String?>(null)
         private set
 
-    // The exact JSON sent on the last Pay; the debug panel will show this to judges.
+    // The exact JSON sent on the last Pay; the debug panel shows it.
     var lastRequestJson by mutableStateOf("")
         private set
 
@@ -59,6 +64,21 @@ class PaymentViewModel(private val api: RukoApi = ApiClient.api) : ViewModel() {
 
     val canPay: Boolean
         get() = upiId.trim().contains('@') && amountInr != null && !checking
+
+    /** The question is for new payees above small everyday amounts. */
+    val askWhoIsPayee: Boolean
+        get() = entryMethod == EntryMethod.TYPED && (amountInr ?: 0.0) >= ASK_PAYEE_FROM_INR
+
+    fun typePayee(text: String) {
+        upiId = text
+        entryMethod = EntryMethod.TYPED
+    }
+
+    fun pickSavedPayee(id: String) {
+        upiId = id
+        entryMethod = EntryMethod.CONTACT
+        payerSays = null
+    }
 
     fun checkServer() {
         viewModelScope.launch {
@@ -91,9 +111,9 @@ class PaymentViewModel(private val api: RukoApi = ApiClient.api) : ViewModel() {
                 userId = DemoConfig.USER_ID,
                 upiId = upiId,
                 amountInr = amount,
-                typedManually = typedManually,
+                entryMethod = entryMethod,
+                payerSays = payerSays.takeIf { askWhoIsPayee },
                 context = reading?.context,
-                lureTags = reading?.lureTags.orEmpty(),
             )
             lastRequestJson = RukoJson.encodeToString(DecideRequest.serializer(), request)
             lastSimulated = reading?.simulated.orEmpty()
@@ -101,10 +121,13 @@ class PaymentViewModel(private val api: RukoApi = ApiClient.api) : ViewModel() {
 
             val start = SystemClock.elapsedRealtime()
             val result = try {
-                Decision.Result(api.decide(request), SystemClock.elapsedRealtime() - start)
+                val response = api.decide(request)
+                if (response.requestId != request.requestId) Log.w(TAG, "response for another request")
+                if (response.failOpen) Decision.Unavailable else Decision.Result(response, SystemClock.elapsedRealtime() - start)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                // Includes HTTP 422 for a request the server does not accept: fail open.
                 Log.w(TAG, "decide failed, failing open", e)
                 Decision.Unavailable
             }
@@ -117,11 +140,13 @@ class PaymentViewModel(private val api: RukoApi = ApiClient.api) : ViewModel() {
     fun reset() {
         upiId = ""
         amountText = ""
-        typedManually = true
+        entryMethod = EntryMethod.TYPED
+        payerSays = null
         decision = null
     }
 
     private companion object {
         const val TAG = "RukoPay"
+        const val ASK_PAYEE_FROM_INR = 2_000.0
     }
 }

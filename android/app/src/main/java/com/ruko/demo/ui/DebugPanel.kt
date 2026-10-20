@@ -38,11 +38,9 @@ import com.ruko.demo.signals.Signals
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.nullable
 import kotlinx.serialization.json.Json
 import com.ruko.demo.net.Context as RequestContext
-import com.ruko.demo.net.LureTag as RequestLureTag
 
 private val prettyJson = Json(from = RukoJson) { prettyPrint = true }
 
@@ -71,16 +69,11 @@ fun DebugPanel(vm: PaymentViewModel, consents: Consents, onBack: () -> Unit) {
 
         SectionTitle(R.string.debug_live)
         val r = reading
-        if (r != null && r.context == null) {
+        if (r != null && r.phone.call == null) {
             Text(stringResource(R.string.debug_context_off), color = CacheColors.TextSecondary)
         }
         CodeBlock(
-            buildString {
-                append("\"context\": ")
-                append(r?.let { prettyJson.encodeToString(RequestContext.serializer().nullable, it.context) } ?: "…")
-                append("\n\"lure_tags\": ")
-                append(r?.let { prettyJson.encodeToString(ListSerializer(RequestLureTag.serializer()), it.lureTags) } ?: "…")
-            }
+            "\"context\": " + (r?.let { prettyJson.encodeToString(RequestContext.serializer().nullable, it.context) } ?: "…")
         )
 
         SectionTitle(R.string.debug_overrides)

@@ -1,0 +1,12 @@
+{
+  "request_id": "6f1c2a0e-3b7d-4e7a-9a51-2d8c0f4b9e13",
+  "tier": "T3",
+  "reasons": ["R2_remote_control", "R1_live_unknown_call", "R3_mule_like_payee", "R9_story_mismatch"],
+  "message_key": "t3_digital_arrest",
+  "pause_minutes": 30,
+  "playbook": "digital_arrest",
+  "stage": "S4",
+  "evidence_id": "e_3fa91c07d2b4",
+  "fail_open": false,
+  "contract_version": "c2-0.1"
+}

@@ -6,8 +6,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-// PAYEE_SALT and API_BASE_URL come from local.properties, which is never committed.
-// PAYEE_SALT must equal the backend's .env value or the demo payee will look brand new.
+// API_BASE_URL can be set in local.properties, which is never committed.
 val localProps = Properties().apply {
     val file = rootProject.file("local.properties")
     if (file.exists()) file.inputStream().use { load(it) }
@@ -24,11 +23,11 @@ android {
         versionCode = 1
         versionName = "1.0-finale"
 
-        buildConfigField("String", "PAYEE_SALT", "\"${localProps.getProperty("PAYEE_SALT", "")}\"")
+        // 127.0.0.1, not localhost: localhost tries IPv6 first and adds ~200 ms (backend README).
         buildConfigField(
             "String",
             "API_BASE_URL",
-            "\"${localProps.getProperty("API_BASE_URL", "http://localhost:8000/")}\""
+            "\"${localProps.getProperty("API_BASE_URL", "http://127.0.0.1:8000/")}\""
         )
     }
 

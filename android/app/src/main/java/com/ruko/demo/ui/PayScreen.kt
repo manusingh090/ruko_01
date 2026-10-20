@@ -4,6 +4,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
+import com.ruko.demo.net.EntryMethod
+import com.ruko.demo.net.PayerSays
 import com.ruko.demo.signals.Signals
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -47,10 +49,7 @@ fun PayScreen(
                     Row(
                         modifier = Modifier
                             .cacheCard(radius = 50.dp)
-                            .clickable {
-                                vm.upiId = payee
-                                vm.typedManually = false
-                            }
+                            .clickable { vm.pickSavedPayee(payee) }
                             .padding(start = 6.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -77,7 +76,7 @@ fun PayScreen(
                     maxLines = 1,
                 )
                 Text(
-                    text = stringResource(if (vm.typedManually) R.string.pay_typed else R.string.pay_saved),
+                    text = stringResource(if (vm.entryMethod == EntryMethod.TYPED) R.string.pay_typed else R.string.pay_saved),
                     style = MaterialTheme.typography.bodySmall,
                     color = CacheColors.TextSecondary,
                 )
@@ -86,10 +85,7 @@ fun PayScreen(
 
         OutlinedTextField(
             value = vm.upiId,
-            onValueChange = {
-                vm.upiId = it
-                vm.typedManually = true
-            },
+            onValueChange = vm::typePayee,
             label = { Text(stringResource(R.string.pay_upi_label)) },
             singleLine = true,
             shape = RoundedCornerShape(14.dp),
@@ -111,6 +107,8 @@ fun PayScreen(
             modifier = Modifier.fillMaxWidth(),
         )
 
+        if (vm.askWhoIsPayee) WhoIsPayee(vm)
+
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -130,5 +128,38 @@ fun PayScreen(
             enabled = vm.canPay,
             loading = vm.checking,
         )
+    }
+}
+
+/** "Who are you paying?" Optional; tapping the chosen answer again clears it. */
+@Composable
+private fun WhoIsPayee(vm: PaymentViewModel) {
+    val options = listOf(
+        PayerSays.FAMILY to R.string.payer_family,
+        PayerSays.SHOP to R.string.payer_shop,
+        PayerSays.COMPANY to R.string.payer_company,
+        PayerSays.GOVERNMENT to R.string.payer_government,
+        PayerSays.INVESTMENT to R.string.payer_investment,
+        PayerSays.OTHER to R.string.payer_other,
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(stringResource(R.string.payer_question), style = MaterialTheme.typography.titleMedium)
+        options.chunked(3).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { (value, label) ->
+                    val selected = vm.payerSays == value
+                    Text(
+                        text = stringResource(label),
+                        style = MaterialTheme.typography.labelLarge,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .weight(1f)
+                            .cacheCard(radius = 12.dp, borderColor = if (selected) CacheColors.PrimaryLight else CacheColors.CardBorder)
+                            .clickable { vm.payerSays = if (selected) null else value }
+                            .padding(vertical = 12.dp),
+                    )
+                }
+            }
+        }
     }
 }

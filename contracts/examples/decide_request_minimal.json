@@ -1,0 +1,9 @@
+{
+  "request_id": "0b6e4d2f-8c1a-4f3e-b7d9-5a2c1e8f0d47",
+  "user_id": "u_demo_meena",
+  "payee_upi_id": "shreeganesh.kirana@okaxis",
+  "amount_inr": 240,
+  "entry_method": "qr",
+  "ts": "2026-11-07T09:15:00+05:30",
+  "context": null
+}

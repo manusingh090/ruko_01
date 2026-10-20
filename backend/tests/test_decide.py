@@ -1,5 +1,5 @@
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import httpx
 import pytest
@@ -231,3 +231,22 @@ def test_evidence_file_in_missing_folder(tmp_path):
                  "family_scores": {}, "features": {}, "intel_status": {}, "stage_path": [],
                  "model_version": "m", "policy_version": "p"})
     assert store.verify() == {"ok": True, "rows_checked": 1, "first_bad_id": None}
+
+
+# ---------- live phone demo ----------
+
+def test_demo_clock_uses_sim_time_not_phone_time(world, mock):
+    """A real phone sends today's date; with --demo-clock the engine decides at the sim clock."""
+    pump(mock[1], world)
+    client = httpx.AsyncClient(transport=httpx.ASGITransport(app=mock[0]), base_url="http://mock")
+    app = create_engine(world[0], intel_client=client, intel_cache_ttl_s=0, log_path=None,
+                        evidence_async=False, demo_clock=True)
+    sim_now = datetime.fromisoformat(mock[1].get("/sim/state").json()["now"])
+    phone_ts = sim_now - timedelta(days=400)
+    with TestClient(app) as engine:  # runs the lifespan, which reads the sim clock
+        assert engine.get("/health").json()["demo_clock"] is True
+        r = engine.post("/v1/decide", json=req(context=MEENA_CONTEXT, says="government",
+                                               ts=phone_ts)).json()
+        assert r["tier"] in ("T3", "T4")
+        ev = engine.get(f"/v1/evidence/{r['evidence_id']}").json()
+    assert abs(datetime.fromisoformat(ev["ts"]) - sim_now) < timedelta(minutes=1)

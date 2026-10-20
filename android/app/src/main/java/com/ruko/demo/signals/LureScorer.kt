@@ -1,6 +1,6 @@
 package com.ruko.demo.signals
 
-import com.ruko.demo.net.LureTag
+import com.ruko.demo.net.LureSignal
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlin.math.exp
@@ -109,9 +109,11 @@ fun bestLureTags(hits: List<LureHit>): List<LureHit> =
         .map { (_, sameTag) -> sameTag.maxBy { it.conf } }
         .sortedByDescending { it.conf }
 
-fun LureHit.toRequestTag() = LureTag(tag = tag, conf = round2(conf))
+fun LureHit.toLureSignal() = LureSignal(tag = tag, conf = round2(conf), minAgo = round1(minAgo.coerceAtLeast(0.0)))
 
 private fun round2(value: Double) = kotlin.math.round(value * 100) / 100
+
+private fun round1(value: Double) = kotlin.math.round(value * 10) / 10
 
 /**
  * scikit-learn's char_wb analyzer: each whitespace separated word is padded with one space

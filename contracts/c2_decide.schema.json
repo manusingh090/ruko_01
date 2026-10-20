@@ -1,0 +1,421 @@
+{
+  "title": "RUKO C2: POST /v1/decide",
+  "contract_version": "c2-0.1",
+  "request": {
+    "$defs": {
+      "CallSignal": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Active"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "sim",
+                  "voip"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Kind"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "enum": [
+                  "incoming",
+                  "outgoing"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Direction"
+          },
+          "caller_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Caller Number"
+          },
+          "caller_in_contacts": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Caller In Contacts"
+          },
+          "started_min_ago": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Started Min Ago"
+          },
+          "ended_min_ago": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Ended Min Ago"
+          }
+        },
+        "title": "CallSignal",
+        "type": "object"
+      },
+      "Context": {
+        "additionalProperties": false,
+        "properties": {
+          "call": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/CallSignal"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "device": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/DeviceSignal"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "lures": {
+            "items": {
+              "$ref": "#/$defs/LureSignal"
+            },
+            "title": "Lures",
+            "type": "array"
+          }
+        },
+        "title": "Context",
+        "type": "object"
+      },
+      "DeviceSignal": {
+        "additionalProperties": false,
+        "properties": {
+          "remote_access_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Remote Access Active"
+          },
+          "remote_app_installed_min_ago": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Remote App Installed Min Ago"
+          },
+          "untrusted_accessibility": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Untrusted Accessibility"
+          },
+          "sideloaded_last_24h": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Sideloaded Last 24H"
+          }
+        },
+        "title": "DeviceSignal",
+        "type": "object"
+      },
+      "LureSignal": {
+        "additionalProperties": false,
+        "properties": {
+          "tag": {
+            "enum": [
+              "arrest_threat",
+              "kyc",
+              "task_job",
+              "trading_tip",
+              "refund",
+              "normal"
+            ],
+            "title": "Tag",
+            "type": "string"
+          },
+          "conf": {
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Conf",
+            "type": "number"
+          },
+          "min_ago": {
+            "minimum": 0,
+            "title": "Min Ago",
+            "type": "number"
+          }
+        },
+        "required": [
+          "tag",
+          "conf",
+          "min_ago"
+        ],
+        "title": "LureSignal",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "request_id": {
+        "title": "Request Id",
+        "type": "string"
+      },
+      "user_id": {
+        "title": "User Id",
+        "type": "string"
+      },
+      "payee_upi_id": {
+        "title": "Payee Upi Id",
+        "type": "string"
+      },
+      "amount_inr": {
+        "exclusiveMinimum": 0,
+        "title": "Amount Inr",
+        "type": "number"
+      },
+      "entry_method": {
+        "enum": [
+          "typed",
+          "qr",
+          "contact",
+          "collect"
+        ],
+        "title": "Entry Method",
+        "type": "string"
+      },
+      "payer_says": {
+        "anyOf": [
+          {
+            "enum": [
+              "government",
+              "company",
+              "family",
+              "shop",
+              "investment",
+              "other"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Payer Says"
+      },
+      "ts": {
+        "format": "date-time",
+        "title": "Ts",
+        "type": "string"
+      },
+      "context": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/Context"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      }
+    },
+    "required": [
+      "request_id",
+      "user_id",
+      "payee_upi_id",
+      "amount_inr",
+      "entry_method",
+      "ts"
+    ],
+    "title": "DecideRequest",
+    "type": "object"
+  },
+  "response": {
+    "additionalProperties": false,
+    "properties": {
+      "request_id": {
+        "title": "Request Id",
+        "type": "string"
+      },
+      "tier": {
+        "enum": [
+          "T0",
+          "T1",
+          "T2",
+          "T3",
+          "T4"
+        ],
+        "title": "Tier",
+        "type": "string"
+      },
+      "reasons": {
+        "items": {
+          "enum": [
+            "R1_live_unknown_call",
+            "R2_remote_control",
+            "R3_mule_like_payee",
+            "R4_unusual_amount",
+            "R5_lure_message",
+            "R6_new_payee_typed",
+            "R7_tranche_pattern",
+            "R8_intel_hit",
+            "R9_story_mismatch",
+            "ruko_unavailable"
+          ],
+          "type": "string"
+        },
+        "title": "Reasons",
+        "type": "array"
+      },
+      "message_key": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Message Key"
+      },
+      "pause_minutes": {
+        "default": 0,
+        "title": "Pause Minutes",
+        "type": "integer"
+      },
+      "playbook": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Playbook"
+      },
+      "stage": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Stage"
+      },
+      "evidence_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Evidence Id"
+      },
+      "fail_open": {
+        "default": false,
+        "title": "Fail Open",
+        "type": "boolean"
+      },
+      "contract_version": {
+        "default": "c2-0.1",
+        "title": "Contract Version",
+        "type": "string"
+      }
+    },
+    "required": [
+      "request_id",
+      "tier",
+      "reasons"
+    ],
+    "title": "DecideResponse",
+    "type": "object"
+  }
+}

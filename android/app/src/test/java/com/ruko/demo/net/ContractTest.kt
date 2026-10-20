@@ -1,69 +1,157 @@
 package com.ruko.demo.net
 
-import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
+/**
+ * Checks Models.kt against contracts/ in the repo (published from backend/schema/events.py),
+ * so a contract change on the server breaks this test instead of the demo.
+ */
 class ContractTest {
 
+    private val contracts: File = generateSequence(File("").absoluteFile) { it.parentFile }
+        .map { File(it, "contracts") }
+        .first { File(it, "c2_decide.schema.json").exists() }
+
+    private val schema = Json.parseToJsonElement(File(contracts, "c2_decide.schema.json").readText()).jsonObject
+    private val request = schema.getValue("request").jsonObject
+    private val defs = request.getValue("\$defs").jsonObject
+
+    // Strict: fails on any field the app does not model.
+    private val strict = Json { ignoreUnknownKeys = false }
+
+    private fun example(name: String) = File(contracts, "examples/$name").readText()
+
     @Test
-    fun payeeHashMatchesPython() {
-        // python -c "import hashlib;print(hashlib.sha256(('meena.mule@okaxis'+'test_salt').encode()).hexdigest())"
-        assertEquals(
-            "4fdeb717d5a95a4b634a8d96aadb60f1f86ec96dca85fc7464fd1d653240618a",
-            payeeHash("  Meena.Mule@OKAXIS ", salt = "test_salt"),
-        )
+    fun contractVersionMatches() {
+        assertEquals(schema.getValue("contract_version").jsonPrimitive.content, CONTRACT_VERSION)
     }
 
     @Test
-    fun optedOutRequestSendsNullContextAndContractKeys() {
-        val request = RequestBuilder.build(
+    fun everyExampleDecodesWithNoUnknownFields() {
+        File(contracts, "examples").listFiles()!!.sortedBy { it.name }.forEach { file ->
+            when {
+                file.name.startsWith("decide_request") -> strict.decodeFromString(DecideRequest.serializer(), file.readText())
+                file.name.startsWith("decide_response") -> strict.decodeFromString(DecideResponse.serializer(), file.readText())
+            }
+        }
+    }
+
+    @Test
+    fun meenaRequestRoundTripsExactly() {
+        val original = Json.parseToJsonElement(example("decide_request_meena.json"))
+        val decoded = RukoJson.decodeFromString(DecideRequest.serializer(), original.toString())
+        val encoded = RukoJson.parseToJsonElement(RukoJson.encodeToString(DecideRequest.serializer(), decoded))
+        assertEquals(normalise(original), normalise(encoded))
+    }
+
+    @Test
+    fun builtRequestUsesOnlySchemaFieldsAndHasTheRequiredOnes() {
+        val built = RequestBuilder.build(
             userId = "u_demo_meena",
-            upiId = "x@okaxis",
+            upiId = " Secure.Settlement.Desk@okaxis ",
             amountInr = 95000.0,
-            typedManually = true,
-            context = null,
-            ts = "2026-11-07T10:40:00+05:30",
-        )
-        val json = RukoJson.parseToJsonElement(
-            RukoJson.encodeToString(DecideRequest.serializer(), request)
-        ).jsonObject
-
-        assertEquals(
-            setOf("user_id", "payee_vpa_hash", "amount_inr", "ts", "context", "lure_tags", "payee_typed_manually"),
-            json.keys,
-        )
-        assertEquals(JsonNull, json["context"])
-    }
-
-    @Test
-    fun contextKeysAreSnakeCase() {
-        val json = RukoJson.parseToJsonElement(
-            RukoJson.encodeToString(Context.serializer(), Context())
-        ).jsonObject
-        assertEquals(
-            setOf(
-                "on_call", "caller_in_contacts", "call_minutes", "remote_access_app",
-                "accessibility_on", "sideload_last_24h", "screen_recorded",
+            entryMethod = EntryMethod.TYPED,
+            payerSays = PayerSays.GOVERNMENT,
+            context = Context(
+                call = CallSignal(true, CallKind.SIM, CallDirection.INCOMING, "+919812345670", false, 38.0, null),
+                device = DeviceSignal(null, 25.0, false, null),
+                lures = listOf(LureSignal("arrest_threat", 0.85, 52.0)),
             ),
-            json.keys,
         )
+        val json = RukoJson.parseToJsonElement(RukoJson.encodeToString(DecideRequest.serializer(), built)).jsonObject
+        assertFieldsAllowed(json, request)
+        val context = json.getValue("context").jsonObject
+        assertFieldsAllowed(context, defs.getValue("Context").jsonObject)
+        assertFieldsAllowed(context.getValue("call").jsonObject, defs.getValue("CallSignal").jsonObject)
+        assertFieldsAllowed(context.getValue("device").jsonObject, defs.getValue("DeviceSignal").jsonObject)
+        assertFieldsAllowed(context.getValue("lures").jsonArray.first().jsonObject, defs.getValue("LureSignal").jsonObject)
+        assertEquals("secure.settlement.desk@okaxis", json.getValue("payee_upi_id").jsonPrimitive.content)
     }
 
     @Test
-    fun responseIgnoresUnknownFields() {
+    fun enumValuesAreOnesTheServerAccepts() {
+        val props = request.getValue("properties").jsonObject
+        val callProps = defs.getValue("CallSignal").jsonObject.getValue("properties").jsonObject
+        assertSubset(EntryMethod.entries.map(::wire), enumValues(props.getValue("entry_method")))
+        assertSubset(PayerSays.entries.map(::wire), enumValues(props.getValue("payer_says")))
+        assertSubset(CallKind.entries.map(::wire), enumValues(callProps.getValue("kind")))
+        assertSubset(CallDirection.entries.map(::wire), enumValues(callProps.getValue("direction")))
+    }
+
+    @Test
+    fun optedOutRequestMatchesTheMinimalExample() {
+        val built = RequestBuilder.build(
+            userId = "u_demo_meena",
+            upiId = "shreeganesh.kirana@okaxis",
+            amountInr = 240.0,
+            entryMethod = EntryMethod.QR,
+            context = null,
+            ts = "2026-11-07T09:15:00+05:30",
+            requestId = "0b6e4d2f-8c1a-4f3e-b7d9-5a2c1e8f0d47",
+        )
+        val encoded = RukoJson.parseToJsonElement(RukoJson.encodeToString(DecideRequest.serializer(), built))
+        assertEquals(normalise(Json.parseToJsonElement(example("decide_request_minimal.json"))), normalise(encoded))
+    }
+
+    @Test
+    fun responseKeepsWorkingWhenTheServerAddsAField() {
         val response = RukoJson.decodeFromString(
             DecideResponse.serializer(),
-            """{"tier":"T3","reasons":["R1_live_unknown_call"],"message_key":"t3_digital_arrest","extra":1}""",
+            """{"request_id":"r1","tier":"T3","reasons":["R1_live_unknown_call"],"message_key":"t3_digital_arrest","new_field":1}""",
         )
         assertEquals("T3", response.tier)
-        assertEquals("t3_digital_arrest", response.messageKey)
+        assertEquals(0, response.pauseMinutes)
     }
 
     @Test
     fun timestampIsIstIso8601() {
         assertTrue(Regex("""\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\+05:30""").matches(RequestBuilder.nowIst()))
+    }
+
+    // ---- helpers ----
+
+    private fun assertFieldsAllowed(json: JsonObject, def: JsonObject) {
+        val allowed = def.getValue("properties").jsonObject.keys
+        assertTrue("not in schema: ${json.keys - allowed}", allowed.containsAll(json.keys))
+        def["required"]?.jsonArray?.map { it.jsonPrimitive.content }?.forEach {
+            assertTrue("missing required $it", it in json.keys)
+        }
+    }
+
+    private fun assertSubset(ours: List<String>, theirs: Set<String>) =
+        assertTrue("$ours not all in $theirs", theirs.containsAll(ours))
+
+    /** Every "enum" list anywhere under a schema property (handles anyOf with null). */
+    private fun enumValues(element: JsonElement): Set<String> = when (element) {
+        is JsonObject -> element.entries.flatMap { (key, value) ->
+            if (key == "enum") value.jsonArray.map { it.jsonPrimitive.content } else enumValues(value)
+        }.toSet()
+        is JsonArray -> element.flatMap(::enumValues).toSet()
+        else -> emptySet()
+    }
+
+    private inline fun <reified T : Enum<T>> wire(value: T): String =
+        RukoJson.encodeToString(kotlinx.serialization.serializer<T>(), value).trim('"')
+
+    /** Drop null fields and compare numbers by value, so 38 and 38.0 are equal. */
+    private fun normalise(element: JsonElement): JsonElement = when (element) {
+        is JsonObject -> JsonObject(element.filterValues { it !is kotlinx.serialization.json.JsonNull }.mapValues { normalise(it.value) })
+        is JsonArray -> JsonArray(element.map(::normalise))
+        is JsonPrimitive -> if (!element.isString && element.content.toDoubleOrNull() != null) {
+            JsonPrimitive(element.content.toDouble())
+        } else {
+            element
+        }
     }
 }

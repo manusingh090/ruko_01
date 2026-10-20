@@ -222,5 +222,6 @@ fun reasonText(code: String): String? = when (code) {
     "R6_new_payee_typed" -> stringResource(R.string.reason_R6_new_payee_typed)
     "R7_tranche_pattern" -> stringResource(R.string.reason_R7_tranche_pattern)
     "R8_intel_hit" -> stringResource(R.string.reason_R8_intel_hit)
-    else -> null
+    "R9_story_mismatch" -> stringResource(R.string.reason_R9_story_mismatch)
+    else -> null // includes ruko_unavailable, which is not shown as a reason
 }

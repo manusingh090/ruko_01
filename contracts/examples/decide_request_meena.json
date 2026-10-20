@@ -1,0 +1,29 @@
+{
+  "request_id": "6f1c2a0e-3b7d-4e7a-9a51-2d8c0f4b9e13",
+  "user_id": "u_demo_meena",
+  "payee_upi_id": "secure.settlement.desk@okaxis",
+  "amount_inr": 95000,
+  "entry_method": "typed",
+  "payer_says": "government",
+  "ts": "2026-11-07T10:40:00+05:30",
+  "context": {
+    "call": {
+      "active": true,
+      "kind": "voip",
+      "direction": "incoming",
+      "caller_number": "+919812345670",
+      "caller_in_contacts": false,
+      "started_min_ago": 38,
+      "ended_min_ago": null
+    },
+    "device": {
+      "remote_access_active": true,
+      "remote_app_installed_min_ago": 25,
+      "untrusted_accessibility": null,
+      "sideloaded_last_24h": null
+    },
+    "lures": [
+      {"tag": "arrest_threat", "conf": 0.91, "min_ago": 52}
+    ]
+  }
+}

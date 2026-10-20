@@ -9,7 +9,10 @@ from typing import Literal, Optional
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
-Tier = Literal["T0", "T1", "T2", "T3", "T4"]
+# Bump on any shape change, and re-export contracts/ (python -m schema.export).
+CONTRACT_VERSION = "c2-0.1"
+
+Tier =Literal["T0", "T1", "T2", "T3", "T4"]
 ReasonCode = Literal[
     "R1_live_unknown_call", "R2_remote_control", "R3_mule_like_payee", "R4_unusual_amount",
     "R5_lure_message", "R6_new_payee_typed", "R7_tranche_pattern", "R8_intel_hit",
@@ -73,4 +76,5 @@ class DecideResponse(_M):
     stage: Optional[str] = None
     evidence_id: Optional[str] = None
     fail_open: bool = False
+    contract_version: str = CONTRACT_VERSION
     # Never p_scam: the user sees reasons in words, never a score.

@@ -17,6 +17,7 @@ If `main` runs, the team can demo. Branches: `backend/*`.
 | Cases, feedback, demo controls | `api/routes/cases.py`, `api/routes/feedback.py`, `api/routes/sim.py` |
 | Shared schema (everyone mirrors it) | `schema/events.py` |
 | Schema test | `tests/test_schema.py` |
+| Published contract (JSON Schema + examples) | `schema/export.py` → `../contracts/` |
 | Packaging | `../docker-compose.yml`, `../Makefile` (repo root) |
 
 Written by others but served from here:
@@ -48,5 +49,24 @@ What is here so far:
 - `intel_mock/` one mock per real organisation, reproducing their blind spots (lag, coverage, false entries).
 - `docs/` notes on how the real systems work and how the mocks copy them.
 
-Not done yet: `schema/events.py` still differs from the Android request (`payee_vpa_hash`, flat
-context flags); feedback, report, prefetch and pause enforcement endpoints; Redis/Postgres; docker-compose.
+## Run against the phone
+
+1. Regenerate the data if `data/*.parquet` is missing (it is gitignored), start both services as
+   above, and add `--demo-clock` to the engine:
+   `python -m api.main --data data --port 8000 --demo-clock`.
+   The phone sends today's time, but the synthetic world lives at the sim clock (data end,
+   2026-11-07). With the flag, the engine decides at the sim clock instead. `GET /health` shows
+   `"demo_clock": true`.
+2. Pump the mule: `python -m sim.mule_pump --payers 40`.
+3. With the phone on USB, run `adb reverse tcp:8000 tcp:8000`. The app's default
+   `http://localhost:8000/` then reaches the laptop, and cleartext to localhost is already allowed.
+   Over Wi-Fi instead, the app needs the laptop's LAN IP in `network_security_config.xml`, and
+   Windows Firewall must allow inbound TCP 8000.
+4. Check: tap "Check Scam Shield" in the app. It should show `status ok`.
+
+The request/response shape the app must send is published in `../contracts/` (see its README).
+`schema/events.py` stays the source of truth. After changing it, run `python -m schema.export`.
+
+Not done yet: the Android app still sends its older request shape (gaps listed in
+`../contracts/README.md`); feedback, report, prefetch and pause enforcement endpoints;
+Redis/Postgres; docker-compose.

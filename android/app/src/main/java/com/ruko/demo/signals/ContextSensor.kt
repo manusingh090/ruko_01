@@ -20,6 +20,8 @@ import android.telephony.TelephonyManager
 import android.view.accessibility.AccessibilityManager
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
+import com.ruko.demo.net.CallDirection
+import com.ruko.demo.net.CallKind
 import kotlin.math.round
 
 /**
@@ -40,6 +42,7 @@ class ContextSensor(private val app: Context) {
     @Volatile private var callNumber: String? = null
     @Volatile private var lastCallEndedAt = 0L
     @Volatile private var lastCallNumber: String? = null
+    @Volatile private var lastCallDirection: CallDirection? = null
     @Volatile private var lastCallWasVoip = false
 
     /** Set by MainActivity from the Android 15 screen recording callback. */
@@ -83,27 +86,36 @@ class ContextSensor(private val app: Context) {
         if (lastCallEndedAt != 0L && now - lastCallEndedAt > CALL_MEMORY_MS) {
             lastCallEndedAt = 0L
             lastCallNumber = null
+            lastCallDirection = null
         }
 
         val active = simActive || voipActive
         val since = listOf(simCallSince, voipCallSince).filter { it > 0 }.minOrNull()
         val endedRecently = !active && lastCallEndedAt != 0L
+        val endedSim = endedRecently && !lastCallWasVoip
+        val number = when {
+            simActive -> callNumber
+            endedSim -> lastCallNumber
+            else -> null // VoIP calls never expose the caller's number
+        }
         return CallReading(
             // Without phone permission a SIM call cannot be seen, so "no call" is unknown.
             active = if (phoneAllowed || voipActive) active else null,
             kind = when {
                 simActive -> CallKind.SIM
                 voipActive -> CallKind.VOIP
+                endedRecently -> if (lastCallWasVoip) CallKind.VOIP else CallKind.SIM
                 else -> null
             },
-            direction = if (simActive) direction else null,
-            callerInContacts = when {
-                simActive -> callNumber?.let(::inContacts)
-                endedRecently && !lastCallWasVoip -> lastCallNumber?.let(::inContacts)
-                else -> null // VoIP calls never expose the caller's number
+            direction = when {
+                simActive -> direction
+                endedSim -> lastCallDirection
+                else -> null
             },
+            callerInContacts = number?.let(::inContacts),
             startedMinAgo = if (active) since?.let { minutes(now - it) } else null,
             endedMinAgo = if (endedRecently) minutes(now - lastCallEndedAt) else null,
+            callerNumber = number,
         )
     }
 
@@ -152,6 +164,7 @@ class ContextSensor(private val app: Context) {
             voipCallSince = 0L
         } else {
             lastCallNumber = callNumber
+            lastCallDirection = direction
             simCallSince = 0L
             ringing = false
             direction = null

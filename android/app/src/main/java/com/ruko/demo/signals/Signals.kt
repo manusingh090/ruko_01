@@ -13,7 +13,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import com.ruko.demo.data.Consents
-import com.ruko.demo.net.LureTag
 import kotlinx.serialization.json.Json
 import java.io.FileNotFoundException
 import com.ruko.demo.net.Context as RequestContext
@@ -39,9 +38,7 @@ data class SignalReading(
     val context: RequestContext?,
     val lures: List<LureHit>,
     val simulated: List<String>,
-) {
-    val lureTags: List<LureTag> get() = lures.map { it.toRequestTag() }
-}
+)
 
 /** App-wide access to the sensor, the lure model and the debug overrides. */
 object Signals {
@@ -80,7 +77,8 @@ object Signals {
             pasted?.let(::add)
             o.lureTag?.let { add(LureHit(it, 0.9)) }
         }
-        return SignalReading(phone, phone.toRequestContext(), bestLureTags(lures), o.active)
+        val best = bestLureTags(lures)
+        return SignalReading(phone, phone.toRequestContext(best), best, o.active)
     }
 
     private fun loadLureModel(context: Context): LureClassifier = try {
