@@ -12,6 +12,7 @@ from intel_mock.app import create_app as create_mock
 from sim.accounts import DEMO_KIRANA_UPI, DEMO_MEENA
 from sim.config import SimConfig
 from sim.generate import build_world, write_world
+from schema.events import CONTRACT_VERSION
 
 CFG = SimConfig(seed=5, n_users=200, n_days=10, scam_rate=0.05)
 NOW = CFG.end + timedelta(hours=10)
@@ -115,7 +116,7 @@ def test_a_payment_is_traced_from_check_to_outcome(engine):
     d = decide(engine, "pay-1")
     r = outcome(engine, "pay-1", "completed")
     assert r.status_code == 200 and r.json() == {"request_id": "pay-1", "status": "completed", "recorded": True,
-                                                 "contract_version": "c2-0.7"}
+                                                 "contract_version": CONTRACT_VERSION}
     p = engine.get("/v1/payments/pay-1").json()
     assert p["payment_id"] == "pay-1" and p["tier"] == d["tier"] and p["status"] == "completed" and p["checked"]
     listed = engine.get(f"/v1/graph/payments/{DEMO_KIRANA_UPI}").json()

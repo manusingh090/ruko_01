@@ -41,4 +41,28 @@ REASON = {
     "session_app_switches": "R12_coached_session", "session_hesitation": "R12_coached_session",
     "session_abandoned_30m": "R12_coached_session",
 }
-NOT_A_REASON = {"trusted_payee"}
+# trusted_payee is a policy rule; device_* are the phone's own family scores (c2-0.8), whose reasons
+# the phone already chose: they add weight to their family but never name a reason here.
+NOT_A_REASON = {"trusted_payee", "device_c", "device_l", "device_b"}
+
+# The on-device model's features (dataset/device_features.py), for the phone's own reasons.
+DEVICE_REASON = {
+    **{f: "R1_live_unknown_call" for f in ("dev_call_active", "dev_call_voip", "dev_call_unknown", "dev_call_incoming",
+                                           "dev_call_minutes", "dev_call_ended_min_ago", "dev_call_foreign")},
+    **{f: "R2_remote_control" for f in ("dev_remote_installed", "dev_remote_min_ago", "dev_screen_recorded",
+                                        "dev_accessibility", "dev_sideloaded_24h")},
+    **{f: "R5_lure_message" for f in ("dev_lure_max", "dev_lure_arrest", "dev_lure_kyc", "dev_lure_task",
+                                      "dev_lure_trading", "dev_lure_refund", "dev_lure_count_72h", "dev_lure_min_ago")},
+    **{f: "R10_bait_then_pay" for f in ("dev_ep_state", "dev_ep_age_days", "dev_ep_bait_credits", "dev_ep_bait_inr",
+                                        "dev_ep_outs", "dev_ep_new_payees", "dev_ep_escalation", "dev_ep_out_to_in",
+                                        "dev_ep_payee_seen")},
+    **{f: "R4_unusual_amount" for f in ("dev_amount_log10", "dev_amount_to_p95", "dev_amount_to_max",
+                                        "dev_amount_to_median", "dev_hour_share")},
+    **{f: "R6_new_payee_typed" for f in ("dev_entry_typed", "dev_entry_qr", "dev_first_time_payee", "dev_payee_in_contacts")},
+    **{f: "R7_tranche_pattern" for f in ("dev_out_1h", "dev_out_24h")},
+    **{f: "R12_coached_session" for f in ("dev_sess_digits", "dev_sess_median_gap_s", "dev_sess_max_gap_s",
+                                          "dev_sess_gap_vs_usual", "dev_sess_edits", "dev_sess_pasted",
+                                          "dev_sess_paste_after_return_s", "dev_sess_app_switches", "dev_sess_away_s",
+                                          "dev_sess_pay_screen_s", "dev_sess_abandoned_30m")},
+}
+DEVICE_NOT_A_REASON = {"dev_hist_n"}  # how much history the phone has: context, not evidence

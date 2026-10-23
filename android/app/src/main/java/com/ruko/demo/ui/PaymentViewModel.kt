@@ -18,6 +18,7 @@ import com.ruko.demo.net.PayerSays
 import com.ruko.demo.net.RequestBuilder
 import com.ruko.demo.net.RukoApi
 import com.ruko.demo.net.RukoJson
+import com.ruko.demo.signals.PastPayment
 import com.ruko.demo.signals.SessionTracker
 import com.ruko.demo.signals.Signals
 import com.ruko.demo.signals.toE164
@@ -64,6 +65,9 @@ class PaymentViewModel(private val api: RukoApi = ApiClient.api) : ViewModel() {
 
     // This user's usual seconds between amount digits (last 10 payments), kept in sync by the app.
     var typingGaps by mutableStateOf<List<Double>>(emptyList())
+
+    // This user's completed payments, for the on-device model (c2-0.8). Never sent.
+    var pastPayments by mutableStateOf<List<PastPayment>>(emptyList())
 
     // How this Pay screen is being used (c2-0.5): typing rhythm, paste, app switches. Memory only.
     private val session = SessionTracker()
@@ -191,7 +195,9 @@ class PaymentViewModel(private val api: RukoApi = ApiClient.api) : ViewModel() {
 
         viewModelScope.launch {
             val reading = try {
-                withContext(Dispatchers.IO) { Signals.read(consents, upiId, sessionSignal, payeeMobile) }
+                withContext(Dispatchers.IO) {
+                    Signals.read(consents, upiId, sessionSignal, payeeMobile, amount, entryMethod, pastPayments)
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -35,9 +36,31 @@ private fun tierColor(tier: String?): Color = when (tier) {
     else -> CacheColors.TextSecondary
 }
 
+/** The threat level in words (c2-0.8). */
+@Composable
+private fun threatLevelText(level: String): String = when (level) {
+    "low" -> stringResource(R.string.threat_level_low)
+    "medium" -> stringResource(R.string.threat_level_medium)
+    "high" -> stringResource(R.string.threat_level_high)
+    "critical" -> stringResource(R.string.threat_level_critical)
+    else -> stringResource(R.string.threat_level_none)
+}
+
+/** The known scam the payment matches, in words; null for anything the app does not know. */
+@Composable
+private fun fraudText(type: String?): String? = when (type) {
+    "digital_arrest" -> stringResource(R.string.fraud_digital_arrest)
+    "fake_customer_care" -> stringResource(R.string.fraud_fake_customer_care)
+    "fake_kyc_apk" -> stringResource(R.string.fraud_fake_kyc_apk)
+    "trading_group" -> stringResource(R.string.fraud_trading_group)
+    "task_job" -> stringResource(R.string.fraud_task_job)
+    "refund_qr" -> stringResource(R.string.fraud_refund_qr)
+    else -> null
+}
+
 /**
- * Placeholder that prints the tier and reasons (guide step 5). The T1 banner, T2 card,
- * T3 full screen and T4 review screen replace it in step 7. Never shows a score.
+ * The tier, the server's threat analysis (c2-0.8: level, the scam it matches, score, reasons) and
+ * the safe next step. The full T1 banner / T3 pause screens can build on this.
  */
 @Composable
 fun DecisionScreen(vm: PaymentViewModel, onContinue: () -> Unit, onCancel: () -> Unit) {
@@ -78,6 +101,37 @@ fun DecisionScreen(vm: PaymentViewModel, onContinue: () -> Unit, onCancel: () ->
             }
 
             if (result != null) {
+                result.response.threat?.let { threat ->
+                    Text(
+                        text = threatLevelText(threat.level),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = accent,
+                    )
+                    fraudText(threat.fraudType)?.let {
+                        Text(stringResource(R.string.threat_type, it), style = MaterialTheme.typography.bodyLarge)
+                    }
+                    Text(
+                        text = stringResource(R.string.threat_score, threat.score),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = CacheColors.TextSecondary,
+                    )
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .clip(CircleShape)
+                            .background(accent.copy(alpha = 0.18f)),
+                    ) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth(threat.score.coerceIn(0, 100) / 100f)
+                                .height(8.dp)
+                                .clip(CircleShape)
+                                .background(accent),
+                        )
+                    }
+                }
                 if (result.response.messageKey in TASK_KEYS) {
                     Text(stringResource(R.string.decision_task_job), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
                 }
@@ -117,11 +171,15 @@ fun DecisionScreen(vm: PaymentViewModel, onContinue: () -> Unit, onCancel: () ->
             }
         }
 
-        Text(
-            text = stringResource(R.string.decision_placeholder),
-            style = MaterialTheme.typography.bodySmall,
-            color = CacheColors.TextSecondary,
-        )
+        val next = when (result?.response?.threat?.level) {
+            "high", "critical" -> R.string.threat_next_high
+            "medium" -> R.string.threat_next_medium
+            "low", "none" -> R.string.threat_next_low
+            else -> null
+        }
+        next?.let {
+            Text(text = stringResource(it), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+        }
         PrimaryButton(stringResource(R.string.decision_continue), onContinue)
         SecondaryButton(stringResource(R.string.decision_cancel), onCancel)
     }

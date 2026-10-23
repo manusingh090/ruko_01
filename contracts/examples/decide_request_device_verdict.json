@@ -1,0 +1,44 @@
+{
+  "request_id": "2b9c1d44-7e1a-4f6b-9c3d-5e8f0a1b2c3d",
+  "user_id": "u_demo_meena",
+  "payee_upi_id": "secure.settlement.desk@okaxis",
+  "amount_inr": 95000,
+  "entry_method": "typed",
+  "payer_says": "government",
+  "ts": "2026-11-07T10:40:00+05:30",
+  "context": {
+    "call": {
+      "active": true,
+      "kind": "voip",
+      "direction": null,
+      "caller_number": null,
+      "caller_in_contacts": null,
+      "started_min_ago": 38,
+      "ended_min_ago": null,
+      "speaker_on": true
+    },
+    "device": {
+      "remote_access_active": true,
+      "remote_app_installed_min_ago": 25,
+      "untrusted_accessibility": false,
+      "sideloaded_last_24h": false
+    },
+    "lures": [],
+    "episode": null,
+    "session": null,
+    "payee_in_contacts": false,
+    "device_verdict": {
+      "model_version": "device-0.1",
+      "fraud_class": "digital_arrest",
+      "level": "high",
+      "c": 0.99,
+      "l": null,
+      "b": 0.97,
+      "reasons": [
+        "R2_remote_control",
+        "R12_coached_session",
+        "R4_unusual_amount"
+      ]
+    }
+  }
+}

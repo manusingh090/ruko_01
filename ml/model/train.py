@@ -10,6 +10,10 @@
    family's likelihood ratio LR (how much its evidence alone multiplies the odds of a scam) as
    LR / (LR + K): lit when the family alone makes a scam at least K times likelier than usual.
 4. A logistic regression combines the calibrated families and the journey stage into p_scam.
+5. The phone's verdict scores (device_c/l/b, c2-0.8) are hidden on a random VERDICT_DROPOUT share of
+   rows. In the replay the verdict is missing only when every Scam Shield switch is off, so without
+   this the model learns "no verdict = nothing to see" and an app that sends raw signals but no
+   verdict (older build, model asset missing) gets T0 even on Meena's digital arrest.
 Final family models are refit on all rows. Ground truth is used only as the training label.
 """
 from __future__ import annotations
@@ -31,7 +35,7 @@ from model.data import SERVER_FAMILIES, STAGE_FEATURES, encode_frame
 from model.metrics import evaluate, summary_line
 from model.reasons import REASON
 
-VERSION = "lgbm-0.1"
+VERSION = "lgbm-0.2"
 FAMILIES = ("C", "L", "P", "B")
 FAMILY_K = 10.0     # a family is lit when its evidence alone makes a scam >= 10x likelier
 PARAMS = dict(objective="binary", learning_rate=0.05, num_leaves=15, min_data_in_leaf=20,
@@ -39,6 +43,8 @@ PARAMS = dict(objective="binary", learning_rate=0.05, num_leaves=15, min_data_in
 ROUNDS = 200
 CLIP = 1e-4
 ARTIFACTS = Path(__file__).resolve().parent / "artifacts"
+VERDICT = ("device_c", "device_l", "device_b")
+VERDICT_DROPOUT = 0.3
 
 
 def logit(p: np.ndarray) -> np.ndarray:
@@ -60,6 +66,8 @@ def combiner_inputs(cal: dict[str, np.ndarray], stage: np.ndarray) -> np.ndarray
 def train(table: Path, folds: int = 5, seed: int = 0) -> tuple[dict, pd.DataFrame, np.ndarray]:
     df = pd.read_parquet(table)
     x = encode_frame(df)
+    hide = np.random.default_rng(seed).random(len(x)) < VERDICT_DROPOUT
+    x.loc[hide, [c for c in VERDICT if c in x.columns]] = np.nan
     y = df["label_is_scam"].to_numpy(bool)
     w = df["weight"].to_numpy(float)
     groups = df["user_id"].to_numpy()
@@ -95,6 +103,7 @@ def train(table: Path, folds: int = 5, seed: int = 0) -> tuple[dict, pd.DataFram
     model = {
         "version": VERSION, "trained_on": str(table), "rows": int(len(df)), "scam_payments": int(y.sum()),
         "scam_journeys": int(df.loc[y, "journey_id"].nunique()), "prior": prior, "family_k": FAMILY_K,
+        "verdict_dropout": VERDICT_DROPOUT,
         "families": families,
         "combiner": {"inputs": [*FAMILIES, "stage"], "coef": comb.coef_[0].tolist(), "intercept": float(comb.intercept_[0])},
         "reasons": REASON,

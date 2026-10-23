@@ -34,8 +34,11 @@ def raw_features(df: pd.DataFrame) -> list[dict]:
     return [dict(zip(keys, row)) for row in raw.itertuples(index=False)]
 
 
-def tiers(df: pd.DataFrame, feats: list[dict], scores: list[dict]) -> np.ndarray:
+def tiers(df: pd.DataFrame, feats: list[dict], scores: list[dict], cfg: dict | None = None) -> np.ndarray:
+    """Tiers in time order through backend/api/policy.py; `cfg` replaces policy.yaml's numbers."""
     policy, out = Policy(), np.empty(len(df), dtype=object)
+    if cfg is not None:
+        policy.cfg = cfg
     control = (df["control_seen"].to_numpy(bool) if "control_seen" in df
                else ((df["stage"] == 3) | (df["remote_control"] == True)).to_numpy())  # noqa: E712
     for i in np.argsort(df["ts"].to_numpy(), kind="stable"):
@@ -71,15 +74,22 @@ def tier_metrics(df: pd.DataFrame, tier: np.ndarray) -> dict:
     }
 
 
-def run(table: Path) -> dict:
-    df = pd.read_parquet(table).reset_index(drop=True)
-    feats = raw_features(df)
+def score_both(df: pd.DataFrame, feats: list[dict]) -> dict[str, list[dict]]:
+    """The rules engine's and the trained model's scores for every row, keyed by model version."""
     model = predict.load()
     p_ml, fam_ml = model.score_frame(encode_frame(df))
     playbooks = [rule_scorer._playbook(f) for f in feats]
     ml_scores = [{"p_scam": float(p_ml[i]), "family_scores": {k: float(v[i]) for k, v in fam_ml.items()},
                   "playbook": playbooks[i]} for i in range(len(df))]
-    rule_scores = [rule_scorer.score(f) for f in feats]
+    return {rule_scorer.MODEL_VERSION: [rule_scorer.score(f) for f in feats], model.version: ml_scores}
+
+
+def run(table: Path) -> dict:
+    df = pd.read_parquet(table).reset_index(drop=True)
+    feats = raw_features(df)
+    both = score_both(df, feats)
+    rule_scores, ml_scores = both[rule_scorer.MODEL_VERSION], both[predict.load().version]
+    model = predict.load()
     out = {"table": str(table), "rows": int(len(df)), "scam_payments": int(df.label_is_scam.sum())}
     for name, scores in ((rule_scorer.MODEL_VERSION, rule_scores), (model.version, ml_scores)):
         out[name] = {"scores": evaluate(df, np.array([s["p_scam"] for s in scores])),

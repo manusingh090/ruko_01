@@ -100,4 +100,22 @@
     <string name="pay_contact">सेव किया कॉन्टैक्ट, मोबाइल नंबर से भुगतान</string>
     <string name="pay_mobile_typed">मोबाइल नंबर हाथ से लिखा</string>
     <string name="pay_registered_name">बैंक में नाम: %1$s · %2$s</string>
+
+    <!-- c2-0.8: the server's threat analysis on the decision screen -->
+    <string name="threat_level_none">कोई खतरा नहीं मिला</string>
+    <string name="threat_level_low">कम खतरा</string>
+    <string name="threat_level_medium">मध्यम खतरा</string>
+    <string name="threat_level_high">उच्च खतरा</string>
+    <string name="threat_level_critical">गंभीर खतरा</string>
+    <string name="threat_score">खतरा स्कोर %1$d/100</string>
+    <string name="threat_type">यह ऐसा लगता है: %1$s</string>
+    <string name="fraud_digital_arrest">\"डिजिटल अरेस्ट\" धोखाधड़ी</string>
+    <string name="fraud_fake_customer_care">नकली कस्टमर केयर धोखाधड़ी</string>
+    <string name="fraud_fake_kyc_apk">नकली केवाईसी ऐप धोखाधड़ी</string>
+    <string name="fraud_trading_group">नकली ट्रेडिंग या निवेश ग्रुप</string>
+    <string name="fraud_task_job">पार्ट-टाइम टास्क या जॉब धोखाधड़ी</string>
+    <string name="fraud_refund_qr">रिफंड या क्यूआर कोड का धोखा</string>
+    <string name="threat_next_high">अभी भुगतान न करें। कॉल काटें, फिर अपने भरोसेमंद व्यक्ति को या 1930 पर कॉल करें।</string>
+    <string name="threat_next_medium">आगे बढ़ने से पहले जांच लें कि आप किसे भुगतान कर रहे हैं।</string>
+    <string name="threat_next_low">यह ठीक लगता है, फिर भी सावधान रहें।</string>
 </resources>

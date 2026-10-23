@@ -1,6 +1,6 @@
 {
   "title": "RUKO C2: POST /v1/decide",
-  "contract_version": "c2-0.7",
+  "contract_version": "c2-0.8",
   "request": {
     "$defs": {
       "CallSignal": {
@@ -181,6 +181,17 @@
             ],
             "default": null,
             "title": "Payee In Contacts"
+          },
+          "device_verdict": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/DeviceVerdict"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "title": "Context",
@@ -240,6 +251,116 @@
           }
         },
         "title": "DeviceSignal",
+        "type": "object"
+      },
+      "DeviceVerdict": {
+        "additionalProperties": false,
+        "description": "The phone's own model on what only the phone can see (c2-0.8; ml/model/device, DeviceModel.kt).\n\nCalls, apps, SMS (through the lure model), the episode, the Pay screen and the payment history\nare read on the phone and stay there; only this verdict leaves it. Family scores are 0..1,\nrounded to 2 decimals, and each counts only in its own family on the server (rule 5).",
+        "properties": {
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          },
+          "fraud_class": {
+            "anyOf": [
+              {
+                "enum": [
+                  "digital_arrest",
+                  "fake_customer_care",
+                  "fake_kyc_apk",
+                  "trading_group",
+                  "task_job",
+                  "refund_qr"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Fraud Class"
+          },
+          "level": {
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "title": "Level",
+            "type": "string"
+          },
+          "c": {
+            "anyOf": [
+              {
+                "maximum": 1,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "C"
+          },
+          "l": {
+            "anyOf": [
+              {
+                "maximum": 1,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "L"
+          },
+          "b": {
+            "anyOf": [
+              {
+                "maximum": 1,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "B"
+          },
+          "reasons": {
+            "items": {
+              "enum": [
+                "R1_live_unknown_call",
+                "R2_remote_control",
+                "R3_mule_like_payee",
+                "R4_unusual_amount",
+                "R5_lure_message",
+                "R6_new_payee_typed",
+                "R7_tranche_pattern",
+                "R8_intel_hit",
+                "R9_story_mismatch",
+                "R10_bait_then_pay",
+                "R11_ring_link",
+                "R12_coached_session",
+                "ruko_unavailable"
+              ],
+              "type": "string"
+            },
+            "maxItems": 3,
+            "title": "Reasons",
+            "type": "array"
+          }
+        },
+        "required": [
+          "model_version",
+          "level"
+        ],
+        "title": "DeviceVerdict",
         "type": "object"
       },
       "EpisodeSignal": {
@@ -668,6 +789,70 @@
     "type": "object"
   },
   "response": {
+    "$defs": {
+      "Threat": {
+        "additionalProperties": false,
+        "description": "The server's threat analysis of this payment (c2-0.8): every family, the phone's verdict,\npayee intel (bank features, MuleHunter, FRI, I4C registry) and the payment graph.",
+        "properties": {
+          "score": {
+            "maximum": 100,
+            "minimum": 0,
+            "title": "Score",
+            "type": "integer"
+          },
+          "level": {
+            "enum": [
+              "none",
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ],
+            "title": "Level",
+            "type": "string"
+          },
+          "fraud_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "digital_arrest",
+                  "fake_customer_care",
+                  "fake_kyc_apk",
+                  "trading_group",
+                  "task_job",
+                  "refund_qr"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Fraud Type"
+          },
+          "families": {
+            "items": {
+              "enum": [
+                "C",
+                "L",
+                "P",
+                "B"
+              ],
+              "type": "string"
+            },
+            "title": "Families",
+            "type": "array"
+          }
+        },
+        "required": [
+          "score",
+          "level"
+        ],
+        "title": "Threat",
+        "type": "object"
+      }
+    },
     "additionalProperties": false,
     "properties": {
       "request_id": {
@@ -766,9 +951,20 @@
         "type": "boolean"
       },
       "contract_version": {
-        "default": "c2-0.7",
+        "default": "c2-0.8",
         "title": "Contract Version",
         "type": "string"
+      },
+      "threat": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/Threat"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
       }
     },
     "required": [

@@ -20,6 +20,7 @@ import com.ruko.demo.ui.auth.AuthViewModel
 import com.ruko.demo.ui.auth.LoginScreen
 import com.ruko.demo.ui.auth.ProfileScreen
 import com.ruko.demo.ui.auth.SignUpFlow
+import com.ruko.demo.signals.PastPayment
 
 private object Routes {
     const val HOME = "home"
@@ -69,6 +70,8 @@ private fun PaymentApp(auth: AuthViewModel, vm: PaymentViewModel) {
     SideEffect {
         vm.consents = auth.consents
         vm.typingGaps = auth.typingGaps
+        vm.pastPayments = auth.history.filter { it.state == PaymentState.COMPLETED }
+            .map { PastPayment(it.ts / 1000.0, it.payee.trim().lowercase(), it.amountInr) }
     }
 
     NavHost(navController = nav, startDestination = Routes.HOME) {

@@ -1,12 +1,15 @@
 {
   "request_id": "6f1c2a0e-3b7d-4e7a-9a51-2d8c0f4b9e13",
   "tier": "T0",
-  "reasons": ["ruko_unavailable"],
+  "reasons": [
+    "ruko_unavailable"
+  ],
   "message_key": null,
   "pause_minutes": 0,
   "playbook": null,
   "stage": null,
   "evidence_id": null,
   "fail_open": true,
-  "contract_version": "c2-0.7"
+  "contract_version": "c2-0.8",
+  "threat": null
 }

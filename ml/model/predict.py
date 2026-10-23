@@ -85,9 +85,10 @@ class Model:
         return 1 / (1 + np.exp(-z)), fam
 
     def _reasons(self, rows: dict, family_scores: dict) -> list[str]:
-        """Codes of the features that pushed lit families up the most. First the best reason of each
-        lit family (strongest family first), so one family's details never crowd out another
-        family's evidence; then the strongest remaining reasons from any lit family."""
+        """Codes of the features that pushed lit families up the most, taken in turns: the best reason
+        of each lit family (strongest family first), then each family's second best, and so on, so
+        one family's details never crowd out another family's evidence (e.g. a WhatsApp call's R1
+        and the payment's R6 must not hide R2 remote control)."""
         ranked: list[list[tuple[str, float]]] = []
         for f in sorted(family_scores, key=lambda k: -family_scores[k]):
             if family_scores[f] < LIT:
@@ -101,13 +102,10 @@ class Model:
                     weight[code] = weight.get(code, 0.0) + float(c)
             ranked.append(sorted(weight.items(), key=lambda kv: -kv[1]))
         out: list[str] = []
-        for codes in ranked:
-            if codes and codes[0][0] not in out and len(out) < MAX_REASONS:
-                out.append(codes[0][0])
-        rest = sorted((cw for codes in ranked for cw in codes[1:]), key=lambda cw: -cw[1])
-        for code, _ in rest:
-            if code not in out and len(out) < MAX_REASONS:
-                out.append(code)
+        for depth in range(max((len(codes) for codes in ranked), default=0)):
+            for codes in ranked:
+                if depth < len(codes) and codes[depth][0] not in out and len(out) < MAX_REASONS:
+                    out.append(codes[depth][0])
         return out
 
 
@@ -126,7 +124,7 @@ def load(path: str | Path = MODEL_PATH) -> Model:
     return Model(json.loads(Path(path).read_text()))
 
 
-MODEL_VERSION = "lgbm-0.1"
+MODEL_VERSION = "lgbm-0.2"
 
 
 def score(features: dict) -> dict:

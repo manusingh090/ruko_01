@@ -40,9 +40,12 @@ from features.user_baseline import Baselines, UserBaseline
 from intel_mock import bank, dot_fri, i4c_registry, npci
 from intel_mock.app import create_app as create_mock
 from intel_mock.store import Store
-from schema.events import DecideRequest, EpisodeEvent
+from model.device import score as device_score
+from model.device.verdict import verdict as device_verdict
+from schema.events import Context, DecideRequest, DeviceVerdict, EpisodeEvent
 
 TABLES = ("users", "accounts", "ledger", "context_events", "journeys")
+DEVICE_MODEL = Path(__file__).resolve().parents[1] / "model" / "artifacts" / "v0" / "device_model.json"
 STATUS = {404: "not_found", 403: "not_shared"}  # same mapping as api.intel.IntelAdapter._get
 
 
@@ -140,10 +143,11 @@ class EngineReplay:
 
 
 def phone_stream(tables: dict[str, pd.DataFrame], view: PhoneView, feed: EpisodeFeed,
-                 seed: int = 0) -> Iterator[tuple]:
+                 seed: int = 0, device_model: dict | None = None) -> Iterator[tuple]:
     """What every RUKO phone sends, in time order: ("episode", event body) and ("pay", request, info)
     for every payment a RUKO user makes. Credits reach the phones' watchers as they happen; a
-    phone's episode events go out before its owner's next payment."""
+    phone's episode events go out before its owner's next payment. With `device_model`, each
+    request carries the phone's verdict (c2-0.8) computed from its private features, as the app does."""
     upi_user = {upi: uid for uid, upi in view.user_upi.items()}
     playbook = dict(zip(tables["journeys"].journey_id, tables["journeys"].playbook))
     led = tables["ledger"].sort_values("ts", kind="stable")
@@ -168,16 +172,25 @@ def phone_stream(tables: dict[str, pd.DataFrame], view: PhoneView, feed: Episode
             pay_index = journey_paid.get(jid, 0)  # 0 = the journey's first scam payment
             journey_paid[jid] = pay_index + 1
         ctx, raw = view.context_at(uid, t, feed.summary(uid, t, to), payee=to, entry=entry)
+        tr = view.traits[uid]
+        dev = device_features(raw, view.own_history(uid, t), float(amount), entry, to, t, tr.any_shield,
+                              feed.rules["escalation_factor"])
+        verdict = None
+        if device_model is not None and tr.any_shield:
+            verdict = device_verdict(device_model, dev)
+            ctx = (ctx or Context()).model_copy(update={"device_verdict": DeviceVerdict(**verdict)})
         says = view.payer_says(keyed_rng(seed, "payment", tx), entry, amount, is_scam, pb, to)
         req = DecideRequest(request_id=tx, user_id=uid, payee_upi_id=to, amount_inr=float(amount),
                             entry_method=entry, payer_says=says, ts=ts, context=ctx)
         yield "pay", req, {"tx": tx, "t": t, "flow": flow, "journey_id": jid, "playbook": pb, "is_scam": is_scam,
-                           "stage": stage if isinstance(stage, str) else None, "pay_index": pay_index, "raw": raw}
+                           "stage": stage if isinstance(stage, str) else None, "pay_index": pay_index, "raw": raw,
+                           "dev": dev, "verdict": verdict}
         feed.debit(uid, ts, amount, to)
 
 
 def replay(data_dir: str | Path, sample_normal: float = 0.25, warmup_days: float = 14, seed: int = 0,
-           assumptions: dict | None = None, log_every: int = 0) -> pd.DataFrame:
+           assumptions: dict | None = None, log_every: int = 0,
+           device_model: str | Path | None = DEVICE_MODEL) -> pd.DataFrame:
     """One row per kept payment. Scam payments are always kept; normal ones with probability
     `sample_normal` and weight 1/sample_normal. The first `warmup_days` build history only."""
     tables, manifest = load_world(data_dir)
@@ -188,13 +201,13 @@ def replay(data_dir: str | Path, sample_normal: float = 0.25, warmup_days: float
     engine = EngineReplay(Store.load(data_dir), data_dir)
     baselines = Baselines.from_data(data_dir)
     keep_from = (start + timedelta(days=warmup_days)).timestamp()
-    factor = feed.rules["escalation_factor"]
 
     u = tables["users"]
     audit = {uid: (age, lang, region) for uid, age, lang, region in zip(u.user_id, u.age_band, u.language, u.region)}
     acc = tables["accounts"].set_index("upi_id")
     rows, n_pay, n_events, t0 = [], 0, 0, time.perf_counter()
-    for item in phone_stream(tables, view, feed, seed):
+    dm = device_score.load(device_model) if device_model is not None and Path(device_model).exists() else None
+    for item in phone_stream(tables, view, feed, seed, dm):
         if item[0] == "episode":
             engine.episode_event(item[1])
             n_events += 1
@@ -227,9 +240,9 @@ def replay(data_dir: str | Path, sample_normal: float = 0.25, warmup_days: float
                 "payee_is_mule": None if payee is None else bool(payee["is_mule"]),
                 "payee_mule_kind": None if payee is None else payee["mule_kind"],
                 "payee_merchant_kind": None if payee is None else payee["merchant_kind"],
+                "dv_level": (info["verdict"] or {}).get("level"), "dv_class": (info["verdict"] or {}).get("fraud_class"),
                 **feats,
-                **device_features(raw, view.own_history(uid, info["t"]), req.amount_inr, req.entry_method, to,
-                                  info["t"], tr.any_shield, factor),
+                **info["dev"],
             })
         if log_every and n_pay % log_every == 0:
             print(f"  {n_pay:,} payments, {n_events:,} episode events, {len(rows):,} rows, "

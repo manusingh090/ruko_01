@@ -17,6 +17,10 @@ import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import com.ruko.demo.BuildConfig
 import com.ruko.demo.data.Consents
+import com.ruko.demo.net.CallDirection
+import com.ruko.demo.net.CallKind
+import com.ruko.demo.net.DeviceVerdict
+import com.ruko.demo.net.EntryMethod
 import com.ruko.demo.net.EpisodeSignal
 import com.ruko.demo.net.SessionSignal
 import com.ruko.demo.shield.ShieldController
@@ -64,6 +68,10 @@ object Signals {
     var classifier: LureClassifier = KeywordLureClassifier
         private set
 
+    /** The on-device model (assets/device_model.json); null when missing, and then no verdict is sent. */
+    var deviceModel: DeviceModel? = null
+        private set
+
     var overrides by mutableStateOf(SignalOverrides())
 
     /** A message the user pasted into the check box; counts for the next payment only. */
@@ -78,19 +86,30 @@ object Signals {
         sensor = ContextSensor(app)
         contacts = ContactBook(app)
         classifier = loadLureModel(app)
+        deviceModel = try {
+            DeviceModel.parse(app.assets.open(DEVICE_MODEL_ASSET).bufferedReader().use { it.readText() })
+        } catch (e: Exception) {
+            Log.w("Signals", "no $DEVICE_MODEL_ASSET, sending no device verdict", e)
+            null
+        }
     }
 
     /**
      * Off the main thread: may read SMS and query packages. [payee] is the UPI ID being paid;
      * [session] is how the Pay screen was used for this payment (c2-0.5), sent only with
      * "Session checks" on. [payeeMobile] is the mobile number the payee was paid by, if any; it is
-     * only matched against the phone's contacts (c2-0.7), never sent.
+     * only matched against the phone's contacts (c2-0.7), never sent. With [amountInr],
+     * [entryMethod] and [history] (this app's completed payments), the on-device model also runs and
+     * its verdict goes in the request (c2-0.8); the readings behind it stay on the phone.
      */
     fun read(
         consents: Consents,
         payee: String? = null,
         session: SessionSignal? = null,
         payeeMobile: String? = null,
+        amountInr: Double? = null,
+        entryMethod: EntryMethod? = null,
+        history: List<PastPayment> = emptyList(),
     ): SignalReading {
         val now = System.currentTimeMillis()
         val real = PhoneSignals(
@@ -116,8 +135,62 @@ object Signals {
             payee != null -> runCatching { contacts.payeeInContacts(payee, payeeMobile) }.getOrNull()
             else -> null
         }
-        return SignalReading(phone, phone.toRequestContext(best, episode, ses, inContacts), best, episode, o.active)
+        val anyShield = consents.callSignals || consents.appChecks || consents.smsLure || consents.moneyWatch ||
+            consents.sessionSignals
+        val model = deviceModel
+        val verdict = if (model != null && anyShield && payee != null && amountInr != null && entryMethod != null) {
+            runCatching {
+                val facts = PayFacts(
+                    call = phone.call?.toFacts(),
+                    device = phone.device?.toFacts(),
+                    lureHits = if (consents.smsLure) lures.filter { it.tag != "normal" }.map { LureFact(it.tag, it.conf, it.minAgo) } else null,
+                    episode = episode?.toFacts(),
+                    session = ses?.toMap(),
+                    payeeInContacts = inContacts,
+                    history = history,
+                    amountInr = amountInr,
+                    entryMethod = entryMethod.name.lowercase(),
+                    payee = payee.trim().lowercase(),
+                    nowSeconds = now / 1000.0,
+                    anyShield = true,
+                )
+                val v = DeviceVerdicts.of(model, DeviceFeatures.compute(facts))
+                DeviceVerdict(v.modelVersion, v.fraudClass, v.level, v.c, v.l, v.b, v.reasons)
+            }.onFailure { Log.w("Signals", "device model failed; no verdict", it) }.getOrNull()
+        } else {
+            null
+        }
+        return SignalReading(phone, phone.toRequestContext(best, episode, ses, inContacts, verdict), best, episode, o.active)
     }
+
+    private fun CallReading.toFacts() = CallFacts(
+        active = active,
+        kind = kind?.let { if (it == CallKind.VOIP) "voip" else "sim" },
+        direction = direction?.let { if (it == CallDirection.INCOMING) "incoming" else "outgoing" },
+        inContacts = callerInContacts,
+        startedMinAgo = startedMinAgo,
+        endedMinAgo = endedMinAgo,
+        foreign = callerNumber?.let(::toE164)?.let { !it.startsWith("+91") },
+    )
+
+    private fun DeviceReading.toFacts() = DeviceFacts(
+        remoteInstalled = remoteAppInstalled,
+        remoteMinAgo = remoteAppInstalledMinAgo,
+        screenRecorded = screenRecorded,
+        accessibility = untrustedAccessibility,
+        sideloaded24h = sideloadedLast24h,
+    )
+
+    private fun EpisodeSignal.toFacts() = EpisodeFacts(
+        state, ageDays, baitCredits, baitInr, outs, newPayees, escalationSteps, lastOutInr, outToInRatio, payeeSeenInEpisode,
+    )
+
+    private fun SessionSignal.toMap(): Map<String, Any?> = mapOf(
+        "amount_digits" to amountDigits, "amount_median_gap_s" to amountMedianGapS, "amount_max_gap_s" to amountMaxGapS,
+        "amount_gap_vs_usual" to amountGapVsUsual, "amount_edits" to amountEdits, "payee_pasted" to payeePasted,
+        "pasted_within_s_of_return" to pastedWithinSOfReturn, "app_switches" to appSwitches, "away_s" to awayS,
+        "pay_screen_s" to payScreenS, "abandoned_flows_30m" to abandonedFlows30m,
+    )
 
     private fun loadLureModel(context: Context): LureClassifier = try {
         val text = context.assets.open(LURE_ASSET).bufferedReader().use { it.readText() }
@@ -129,8 +202,11 @@ object Signals {
         KeywordLureClassifier
     }
 
-    /** Drop Diwansu's model/artifacts/lure.json here to replace the keyword fallback. */
+    /** Diwansu's ml/model/artifacts/lure.json; the keyword fallback is used when it is missing. */
     const val LURE_ASSET = "lure.json"
+
+    /** ml/model/artifacts/v0/device_model.json (c2-0.8 device verdict). */
+    const val DEVICE_MODEL_ASSET = "device_model.json"
 }
 
 /**

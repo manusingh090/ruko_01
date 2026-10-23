@@ -21,6 +21,8 @@ PRESETS: dict[str, dict] = {
     "tiny": dict(n_users=400, n_days=20, scam_rate=0.05, seed=1),          # tests
     "dev": dict(n_users=5_000, n_days=60, scam_rate=0.04, seed=11),        # quick iterations, training
     "dev_test": dict(n_users=5_000, n_days=60, scam_rate=0.04, seed=12),   # held-out world for dev models
+    "dev_device": dict(n_users=5_000, n_days=60, scam_rate=0.04, seed=14),  # trains the on-device model only
+    "dev_calib": dict(n_users=5_000, n_days=60, scam_rate=0.04, seed=13),  # threshold tuning (model/tune.py)
     "train_device": dict(n_users=20_000, n_days=60, scam_rate=0.04, seed=21),
     "train_server": dict(n_users=20_000, n_days=60, scam_rate=0.04, seed=22),
     "calib": dict(n_users=20_000, n_days=60, scam_rate=0.01, seed=23),

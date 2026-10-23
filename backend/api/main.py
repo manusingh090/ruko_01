@@ -39,7 +39,7 @@ from api.policy import Policy
 from api.episode_events import EpisodeService
 from graph import discover as discovery
 from graph.store import GraphStore
-from schema.events import (CONTRACT_VERSION, DecideRequest, DecideResponse, EpisodeEvent, EpisodeEventResponse,
+from schema.events import (CONTRACT_VERSION, DecideRequest, DecideResponse, EpisodeEvent, EpisodeEventResponse, Threat,
                            PaymentOutcome, PaymentOutcomeResponse)
 from features.tracker import StageTracker
 
@@ -60,7 +60,10 @@ def create_app(data_dir: str | Path, intel_client: httpx.AsyncClient | None = No
                intel_url: str = "http://127.0.0.1:8001", evidence_path: str = ":memory:",
                intel_budget_s: float = 0.150, intel_cache_ttl_s: float = 10.0,
                log_path: str | Path | None = "logs/decide.jsonl", evidence_async: bool = True,
-               demo_clock: bool = False, discover_every_s: float | None = None) -> FastAPI:
+               demo_clock: bool = False, discover_every_s: float | None = None,
+               scorer_name: str = "rules") -> FastAPI:
+    """`scorer_name`: "rules" (api/rule_scorer.py) or "ml" (the trained LightGBM model in
+    ml/model/predict.py). If the model cannot be loaded, the engine keeps the rules (never fails)."""
     client = intel_client or httpx.AsyncClient(base_url=intel_url)
     # sim time - wall time; None means "use the request's ts".
     clock: dict[str, timedelta | None] = {"offset": None}
@@ -95,7 +98,7 @@ def create_app(data_dir: str | Path, intel_client: httpx.AsyncClient | None = No
     evidence = EvidenceStore(evidence_path)
     trusted: dict[str, set[str]] = {}
     # Swappable: anything with score(features) -> same dict shape (e.g. the trained model).
-    app.state.score = scorer.score
+    app.state.score, app.state.model_version = load_scorer(scorer_name)
     app.state.evidence, app.state.trusted = evidence, trusted
     graph = GraphStore()
     app.state.graph = graph
@@ -161,6 +164,11 @@ def create_app(data_dir: str | Path, intel_client: httpx.AsyncClient | None = No
 
         t = time.perf_counter()
         s = app.state.score(feats)
+        # The phone's fraud class names the scam when the server's playbook matcher found none (c2-0.8),
+        # e.g. a WhatsApp "digital arrest" call whose number the phone cannot see.
+        dv = req.context.device_verdict if req.context else None
+        if s["playbook"] is None and dv is not None and dv.fraud_class is not None:
+            s = {**s, "playbook": dv.fraud_class}
         ms["score"] = (time.perf_counter() - t) * 1000
 
         t = time.perf_counter()
@@ -201,11 +209,11 @@ def create_app(data_dir: str | Path, intel_client: httpx.AsyncClient | None = No
         return DecideResponse(
             request_id=req.request_id, tier=d.tier, reasons=reasons, message_key=d.message_key,
             pause_minutes=d.pause_minutes, playbook=s["playbook"] if d.tier != "T0" else None,
-            stage=state.stage, evidence_id=evidence_id)
+            stage=state.stage, evidence_id=evidence_id, threat=threat_of(s, d))
 
     @app.get("/health")
     def health() -> dict:
-        return {"status": "ok", "model_version": scorer.MODEL_VERSION, "policy_version": policy.version,
+        return {"status": "ok", "model_version": app.state.model_version, "policy_version": policy.version,
                 "contract_version": CONTRACT_VERSION, "demo_clock": clock["offset"] is not None}
 
     @app.post("/v1/decide", response_model=DecideResponse)
@@ -360,6 +368,28 @@ def create_app(data_dir: str | Path, intel_client: httpx.AsyncClient | None = No
     return app
 
 
+THREAT_LEVEL = {"T0": "none", "T1": "low", "T2": "medium", "T3": "high", "T4": "critical"}
+
+
+def threat_of(s: dict, d) -> Threat:
+    """The threat analysis the app shows (c2-0.8): score 0..100, a level in words from the tier, the
+    known scam it matches, and the families that agree."""
+    return Threat(score=max(0, min(100, round(100 * s["p_scam"]))), level=THREAT_LEVEL[d.tier],
+                  fraud_type=s["playbook"] if d.tier != "T0" else None, families=list(d.lit_families))
+
+
+def load_scorer(name: str):
+    """(score function, model version). Falls back to the rules if the trained model is missing."""
+    if name == "ml":
+        try:
+            from model import predict  # ml/ is on PYTHONPATH (backend;ml;data)
+            model = predict.load()
+            return predict.score, model.version
+        except Exception:
+            log.exception("trained model not available; using the rules")
+    return scorer.score, scorer.MODEL_VERSION
+
+
 def main() -> None:
     import uvicorn
 
@@ -370,9 +400,11 @@ def main() -> None:
     p.add_argument("--port", type=int, default=8000)
     p.add_argument("--demo-clock", action="store_true",
                    help="ignore request timestamps and use the mock's sim clock (live phone demos)")
+    p.add_argument("--scorer", choices=("ml", "rules"), default="ml",
+                   help="ml: the trained LightGBM model (falls back to rules if missing); rules: rules-only")
     a = p.parse_args()
     uvicorn.run(create_app(a.data, intel_url=a.intel, evidence_path=a.evidence, demo_clock=a.demo_clock,
-                           discover_every_s=3600),
+                           discover_every_s=3600, scorer_name=a.scorer),
                 host="0.0.0.0", port=a.port)
 
 

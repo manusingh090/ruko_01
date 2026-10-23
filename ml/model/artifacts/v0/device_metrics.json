@@ -1,0 +1,25 @@
+{
+  "version": "device-0.1",
+  "rows": 61699,
+  "scam_payments": 538,
+  "pr_auc": 0.9787540621852164,
+  "warn_min_p": 0.5,
+  "warn_legit_per_1000": 0.0,
+  "warn_scam_payments": 0.6022304832713755,
+  "warn_first_scam_payment": 0.6134969325153374,
+  "lit_on_scam": {
+    "C": 0.4721189591078067,
+    "L": 0.3215613382899628,
+    "B": 0.9702602230483272
+  },
+  "export_max_raw_diff": 0.0,
+  "held_out": {
+    "table": "ml\\data\\tables\\dev_test.parquet",
+    "rows": 61554,
+    "scam_payments": 475,
+    "pr_auc": 0.9795665276976364,
+    "warn_legit_per_1000": 0.0,
+    "warn_scam_payments": 0.6357894736842106,
+    "warn_first_scam_payment": 0.609271523178808
+  }
+}

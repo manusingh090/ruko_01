@@ -15,7 +15,8 @@ import api.main
 from api import rule_scorer
 from dataset.episodes import EpisodeFeed
 from dataset.phone_view import PhoneView, Traits
-from dataset.replay import EngineReplay, load_world, phone_stream, world_start
+from dataset.replay import DEVICE_MODEL, EngineReplay, load_world, phone_stream, world_start
+from model.device import score as device_score
 from features.user_baseline import Baselines
 from intel_mock.app import create_app as create_mock
 from intel_mock.store import Store
@@ -42,7 +43,8 @@ def stream(world):
         view.traits[uid] = Traits(call_signals=on, app_checks=on, sms=on, share_accounts=on and i % 2 == 0,
                                   session_signals=on, android_15=i % 2 == 0)
     feed = EpisodeFeed(view.traits, world_start(manifest))
-    items = list(phone_stream(tables, view, feed, seed=0))
+    # The phones also send their own verdict (c2-0.8), computed by the shipped device model.
+    items = list(phone_stream(tables, view, feed, seed=0, device_model=device_score.load(DEVICE_MODEL)))
     # Every episode event and scam payment, plus every 12th other payment (the live side is slow).
     picked, n = [], 0
     for item in items:
@@ -120,3 +122,4 @@ def test_replay_matches_the_live_engine(world, stream, monkeypatch):
     assert sum(f["payee_registry_listed"] is True for f in replayed) >= 1
     assert sum(f["payee_in_contacts"] is True for f in replayed) >= 5
     assert sum(f["payee_in_contacts"] is False for f in replayed) >= 5
+    assert sum(f["device_c"] is not None for f in replayed) >= 20 and sum(f["device_c"] is None for f in replayed) >= 3

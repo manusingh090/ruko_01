@@ -9,7 +9,7 @@ import kotlinx.serialization.json.Json
 // checks these classes against contracts/c2_decide.schema.json and the example files.
 // A null field means "unknown", never "safe".
 
-const val CONTRACT_VERSION = "c2-0.7"
+const val CONTRACT_VERSION = "c2-0.8"
 
 @Serializable
 enum class CallKind {
@@ -114,6 +114,32 @@ data class Context(
     // c2-0.7: the payee (its UPI ID, or the mobile it was paid by) is a saved contact. Only this
     // yes/no leaves the phone, never names or numbers; null when contacts cannot be read.
     @SerialName("payee_in_contacts") val payeeInContacts: Boolean? = null,
+    // c2-0.8: the phone's own model on what only the phone saw; null when it did not run.
+    @SerialName("device_verdict") val deviceVerdict: DeviceVerdict? = null,
+)
+
+/**
+ * The phone's verdict (c2-0.8), built by signals/DeviceVerdicts from signals/DeviceModel. The
+ * readings behind it (calls, apps, SMS, the Pay screen, payment history) never leave the phone.
+ */
+@Serializable
+data class DeviceVerdict(
+    @SerialName("model_version") val modelVersion: String,
+    @SerialName("fraud_class") val fraudClass: String? = null, // the engine's playbook names
+    val level: String, // low | medium | high
+    val c: Double? = null, // calls and remote control; null = not measured
+    val l: Double? = null, // lure messages and the task-scam episode
+    val b: Double? = null, // own spending and the Pay screen
+    val reasons: List<String> = emptyList(),
+)
+
+/** The server's threat analysis of the payment (c2-0.8). */
+@Serializable
+data class Threat(
+    val score: Int, // 0..100
+    val level: String, // none | low | medium | high | critical
+    @SerialName("fraud_type") val fraudType: String? = null,
+    val families: List<String> = emptyList(),
 )
 
 @Serializable
@@ -175,6 +201,7 @@ data class DecideResponse(
     @SerialName("evidence_id") val evidenceId: String? = null,
     @SerialName("fail_open") val failOpen: Boolean = false,
     @SerialName("contract_version") val contractVersion: String? = null,
+    val threat: Threat? = null, // c2-0.8; null when RUKO failed open
 )
 
 // ---------- Payment outcome (c2-0.6): after the PIN or Cancel, off the payment path ----------

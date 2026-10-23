@@ -26,6 +26,9 @@ else
   if [ -x .venv/bin/python ]; then PY=.venv/bin/python; SEP=":"; else PY=.venv/Scripts/python.exe; SEP=";"; fi
   "$PY" -m pip install -q -r backend/requirements.txt
 fi
+# The API scores with the trained model (ml/model/predict.py), which needs LightGBM; without it the
+# API falls back to the rules. ml/requirements.txt includes backend/requirements.txt.
+"$PY" -c "import lightgbm" 2>/dev/null || "$PY" -m pip install -q -r ml/requirements.txt
 export PYTHONPATH="backend${SEP}ml${SEP}data" PYTHONIOENCODING=utf-8
 
 if [ "${REGENERATE:-0}" = 1 ] || [ ! -f data/ledger.parquet ]; then

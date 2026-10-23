@@ -10,7 +10,7 @@ from typing import Literal, Optional
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 # Bump on any shape change, and re-export contracts/ (python -m schema.export).
-CONTRACT_VERSION = "c2-0.7"
+CONTRACT_VERSION = "c2-0.8"
 
 Tier =Literal["T0", "T1", "T2", "T3", "T4"]
 ReasonCode = Literal[
@@ -20,6 +20,9 @@ ReasonCode = Literal[
     "ruko_unavailable",
 ]
 LureTag = Literal["arrest_threat", "kyc", "task_job", "trading_tip", "refund", "normal"]
+# The known scam workflows (playbooks); the engine's and the phone's fraud class use the same names.
+FraudType = Literal["digital_arrest", "fake_customer_care", "fake_kyc_apk", "trading_group", "task_job", "refund_qr"]
+ThreatLevel = Literal["none", "low", "medium", "high", "critical"]
 
 
 class _M(BaseModel):
@@ -89,6 +92,22 @@ class SessionSignal(_M):
     abandoned_flows_30m: Optional[int] = Field(None, ge=0)        # payments started and left unpaid, last 30 min
 
 
+class DeviceVerdict(_M):
+    """The phone's own model on what only the phone can see (c2-0.8; ml/model/device, DeviceModel.kt).
+
+    Calls, apps, SMS (through the lure model), the episode, the Pay screen and the payment history
+    are read on the phone and stay there; only this verdict leaves it. Family scores are 0..1,
+    rounded to 2 decimals, and each counts only in its own family on the server (rule 5).
+    """
+    model_version: str                                   # e.g. "device-0.1"
+    fraud_class: Optional[FraudType] = None              # the scam the phone's signals point to, if any
+    level: Literal["low", "medium", "high"]              # the phone's own threat level
+    c: Optional[float] = Field(None, ge=0, le=1)         # calls and remote control; null = not measured
+    l: Optional[float] = Field(None, ge=0, le=1)         # lure messages and the task-scam episode
+    b: Optional[float] = Field(None, ge=0, le=1)         # own spending and the Pay screen
+    reasons: list[ReasonCode] = Field(default_factory=list, max_length=3)
+
+
 class Context(_M):
     call: Optional[CallSignal] = None
     device: Optional[DeviceSignal] = None
@@ -98,6 +117,7 @@ class Context(_M):
     # c2-0.7: the payee's UPI ID, or the mobile number it was paid by, is a saved contact on the
     # phone. Only this yes/no leaves the phone, never names or numbers. null = contacts not readable.
     payee_in_contacts: Optional[bool] = None
+    device_verdict: Optional[DeviceVerdict] = None  # c2-0.8: null when the phone's model did not run
 
 
 class DecideRequest(_M):
@@ -112,6 +132,15 @@ class DecideRequest(_M):
     context: Optional[Context] = None
 
 
+class Threat(_M):
+    """The server's threat analysis of this payment (c2-0.8): every family, the phone's verdict,
+    payee intel (bank features, MuleHunter, FRI, I4C registry) and the payment graph."""
+    score: int = Field(ge=0, le=100)                     # 0..100 (100 x the scorer's p_scam, rounded)
+    level: ThreatLevel                                    # T0 none, T1 low, T2 medium, T3 high, T4 critical
+    fraud_type: Optional[FraudType] = None               # the known scam it matches, if any
+    families: list[Literal["C", "L", "P", "B"]] = Field(default_factory=list)  # families that agree
+
+
 class DecideResponse(_M):
     request_id: str
     tier: Tier
@@ -123,7 +152,9 @@ class DecideResponse(_M):
     evidence_id: Optional[str] = None
     fail_open: bool = False
     contract_version: str = CONTRACT_VERSION
-    # Never p_scam: the user sees reasons in words, never a score.
+    # c2-0.8: the threat analysis, shown to the user (a team decision that replaced "never a score").
+    # null when RUKO failed open.
+    threat: Optional[Threat] = None
 
 
 # ---------- Episode events: phone -> server when the episode changes state (c2-0.4) ----------

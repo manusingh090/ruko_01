@@ -1,8 +1,11 @@
 {
   "event_id": "8b7c6d5e-4f3a-4b2c-9d1e-0f9a8b7c6d5e",
   "episode_risk": "high",
-  "reasons": ["R10_bait_then_pay", "R3_mule_like_payee"],
+  "reasons": [
+    "R10_bait_then_pay",
+    "R3_mule_like_payee"
+  ],
   "message_key": "episode_task_scam_confirmed",
   "case_id": "c_3f2a1b0c9d8e",
-  "contract_version": "c2-0.7"
+  "contract_version": "c2-0.8"
 }

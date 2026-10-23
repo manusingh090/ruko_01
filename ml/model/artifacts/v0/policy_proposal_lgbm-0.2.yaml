@@ -1,0 +1,53 @@
+# RUKO policy: turns the scorer's output into a tier. Numbers live here, not in code.
+version: policy-0.2-proposal-lgbm-0.2
+
+family_threshold: 0.5            # a family "lights" at this score
+corroboration_min_families: 2    # fewer lit families -> T0, whatever p_scam says
+
+# Walked from T4 down; the first match wins.
+tiers:
+  T4: {min_p: 0.90, min_families: 3, requires_intel_hit: true}   # analyst review
+  T3: {min_p: 0.50, min_families: 2}                             # pause + trusted contact
+  T2: {min_p: 0.30, min_families: 2}                             # explain card, slide to pay
+  T1: {min_p: 0.20, min_families: 2}                             # inline tip
+
+amount_caps:
+  - {below: 200, max_tier: T1}
+
+trusted_payee:
+  # "I know this person" drops to T0 unless one of these holds (coached victims tap it too).
+  overridden_by: [intel_hit, stage_ge_S3]
+
+alert_budget:
+  max_interruptive_per_30d: 2    # T2+ alerts already shown in the last 30 days
+  drop_to: T1
+  bypass_if_p_ge: 0.90
+  # Never throttle while a journey is under way: someone has control of the screen (S3) or the
+  # user is paying a new payee after being contacted (S4/S5). Fatigue control is for calm days.
+  never_applies_in_stages: [S3, S4, S5]
+  # Never throttle when the payee itself looks risky (payee family lit: mule-like account, ring,
+  # registry): fatigue is about the user's nerves, not about who receives the money. Without
+  # this, the same payment to the same mule got T2 twice and then T1 for good.
+  never_applies_with_families: [P]
+
+pause_minutes: {T0: 0, T1: 0, T2: 0, T3: 30, T4: 60}
+
+message_keys:
+  T1: t1_tip
+  T2: t2_generic
+  T3: t3_generic
+  T4: t3_generic
+  playbook_tiers: [T2, T3, T4]   # these use "<tier>_<playbook>" when a playbook matched
+
+# Coached-session signs (c2-0.5): how features/session.py turns the phone's `context.session`
+# numbers into yes/no signs. Behaviour family only -- they never interrupt a payment on their own.
+session:
+  dictated_min_digits: 4          # fewer digits: too short to judge the rhythm
+  dictated_vs_usual: 2.5          # median digit gap >= 2.5x this user's own usual gap
+  # No personal baseline yet (new user): need a slow AND broken rhythm, so a slow typist alone
+  # is not enough.
+  dictated_no_baseline_median_s: 2.0
+  dictated_no_baseline_max_s: 4.0
+  paste_after_return_s: 20       # pasted the UPI ID within 20 s of coming back to the app
+  many_switches: 2                # left the app this many times during one payment
+  hesitation_s: 180               # more than 3 minutes on the Pay screen

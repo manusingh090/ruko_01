@@ -46,7 +46,6 @@
     <string name="decision_why">Why we paused</string>
     <string name="decision_unavailable">Safety check unavailable</string>
     <string name="decision_unavailable_body">Scam Shield could not be reached, so this payment can go ahead.</string>
-    <string name="decision_placeholder">Placeholder screen. The T1 to T4 alert screens replace this in step 7.</string>
     <string name="decision_continue">Continue to PIN</string>
     <string name="decision_cancel">Cancel payment</string>
 
@@ -322,4 +321,22 @@
     <string name="pay_contact">Saved contact, paid by mobile number</string>
     <string name="pay_mobile_typed">Mobile number typed by hand</string>
     <string name="pay_registered_name">Bank name: %1$s · %2$s</string>
+
+    <!-- c2-0.8: the server's threat analysis on the decision screen -->
+    <string name="threat_level_none">No threat found</string>
+    <string name="threat_level_low">Low threat</string>
+    <string name="threat_level_medium">Medium threat</string>
+    <string name="threat_level_high">High threat</string>
+    <string name="threat_level_critical">Critical threat</string>
+    <string name="threat_score">Threat score %1$d/100</string>
+    <string name="threat_type">Looks like: %1$s</string>
+    <string name="fraud_digital_arrest">a \"digital arrest\" scam</string>
+    <string name="fraud_fake_customer_care">a fake customer care scam</string>
+    <string name="fraud_fake_kyc_apk">a fake KYC app scam</string>
+    <string name="fraud_trading_group">a fake trading or investment group</string>
+    <string name="fraud_task_job">a part-time task or job scam</string>
+    <string name="fraud_refund_qr">a refund or QR code trick</string>
+    <string name="threat_next_high">Do not pay now. Hang up, then call your trusted person or 1930.</string>
+    <string name="threat_next_medium">Check who you are paying before you continue.</string>
+    <string name="threat_next_low">This looks fine, but stay alert.</string>
 </resources>

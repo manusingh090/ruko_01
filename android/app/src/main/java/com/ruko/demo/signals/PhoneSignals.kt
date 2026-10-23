@@ -4,6 +4,7 @@ import com.ruko.demo.net.CallDirection
 import com.ruko.demo.net.CallKind
 import com.ruko.demo.net.CallSignal
 import com.ruko.demo.net.DeviceSignal
+import com.ruko.demo.net.DeviceVerdict
 import com.ruko.demo.net.EpisodeSignal
 import com.ruko.demo.net.SessionSignal
 import com.ruko.demo.net.Context as RequestContext
@@ -77,9 +78,10 @@ data class PhoneSignals(val call: CallReading?, val device: DeviceReading?) {
         episode: EpisodeSignal? = null,
         session: SessionSignal? = null,
         payeeInContacts: Boolean? = null,
+        deviceVerdict: DeviceVerdict? = null,
     ): RequestContext? {
         if (call == null && device == null && lures.isEmpty() && episode == null && session == null &&
-            payeeInContacts == null
+            payeeInContacts == null && deviceVerdict == null
         ) {
             return null
         }
@@ -90,6 +92,7 @@ data class PhoneSignals(val call: CallReading?, val device: DeviceReading?) {
             episode = episode,
             session = session,
             payeeInContacts = payeeInContacts,
+            deviceVerdict = deviceVerdict,
         )
     }
 }

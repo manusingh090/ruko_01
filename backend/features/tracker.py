@@ -66,7 +66,10 @@ class StageTracker:
         if call is not None:
             recent_end = call.ended_min_ago is not None and call.ended_min_ago <= CALL_MEMORY.total_seconds() / 60
             on_call = bool(call.active) or recent_end
-            unknown_caller = call.caller_in_contacts is False
+            # A WhatsApp-type (VoIP) call never shows the number, so its contact status is null:
+            # unknown is not safe (rule 1), so it counts as a possible contact like a stranger's call.
+            unknown_caller = call.caller_in_contacts is False or (
+                call.kind == "voip" and call.caller_in_contacts is None)
             if (call.active or recent_end) and unknown_caller:
                 started = now - timedelta(minutes=call.started_min_ago or 0)
                 if not any(abs((c - started).total_seconds()) < 60 for c in s.contacts):
@@ -110,7 +113,8 @@ class StageTracker:
         if not contacted and s.control_ts is None:
             return "S0"
         stage = "S1"
-        long_call = call is not None and (call.started_min_ago or 0) >= 15 and call.caller_in_contacts is False
+        long_call = call is not None and (call.started_min_ago or 0) >= 15 and (
+            call.caller_in_contacts is False or (call.kind == "voip" and call.caller_in_contacts is None))
         if len(s.contacts) >= 2 or (s.contacts and s.lure_ts) or long_call or s.episode_hooked:
             stage = "S2"
         first = min([*s.contacts, *([s.lure_ts] if s.lure_ts else [])], default=None)

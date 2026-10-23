@@ -61,6 +61,13 @@ if (-not (Test-Path $Py)) {
     python -m venv .venv
     & $Py -m pip install -q -r backend\requirements.txt
 }
+# The API scores with the trained model (ml/model/predict.py), which needs LightGBM; without it the
+# API falls back to the rules. ml\requirements.txt includes backend\requirements.txt.
+& $Py -c "import lightgbm" 2>$null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "installing ml/requirements.txt (LightGBM for the trained scorer)"
+    & $Py -m pip install -q -r ml\requirements.txt
+}
 $env:PYTHONPATH = "backend;ml;data"
 $env:PYTHONIOENCODING = "utf-8"
 

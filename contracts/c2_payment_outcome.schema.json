@@ -1,6 +1,6 @@
 {
   "title": "RUKO C2: POST /v1/payment/outcome",
-  "contract_version": "c2-0.7",
+  "contract_version": "c2-0.8",
   "request": {
     "additionalProperties": false,
     "description": "POST /v1/payment/outcome. What happened to a payment after its check. The payment id is the\n/v1/decide `request_id`. Payee and amount are repeated so the payment is recorded even when the\ncheck never reached the server (timeout, fail open). Safe to retry.",
@@ -67,7 +67,7 @@
         "type": "boolean"
       },
       "contract_version": {
-        "default": "c2-0.7",
+        "default": "c2-0.8",
         "title": "Contract Version",
         "type": "string"
       }

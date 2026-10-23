@@ -3,31 +3,53 @@
 Owner: Diwansu Pilania. Everything here lives in `ml/`. Changes other folders need are in §12.
 
 ## 0. Status
-Synced with `main` at 9003aad (contract c2-0.7, engine rules-0.6).
+Branch `feature/threat-analysis` on top of `main` 5fc81a7: contract c2-0.8, engine rules-0.7, server model lgbm-0.2, device model device-0.1.
 
 | | Done | Check |
 |---|---|---|
-| M0 | `.venv` + `ml/requirements.txt` | `pytest ml/tests backend/tests`: 44 ML + 157 backend passed, pandas 3.0 |
+| M0 | `.venv` + `ml/requirements.txt` | `pytest ml/tests backend/tests`: 50 ML + 166 backend passed, pandas 3.0; Kotlin model and contract tests (33) compiled and run here with IntelliJ's kotlinc |
 | M2 | `dataset/phone_view.py` (the app's exact readings: call, device, lures, session, payee in contacts), `dataset/episodes.py` (the backend's own episode state machine + episode events), `dataset/graph.py`, `dataset/replay.py` (incl. payment outcomes, c2-0.6), `dataset/worlds.py` | replay == live engine, feature for feature, with episode events, outcomes and the payment graph (`test_replay_parity.py`) |
 | M3 | `model/metrics.py` (deck slide 7), `model/experiments.py` (ablation incl. the current rules engine) | runs; the world is still too easy to rank models (§12) |
 | M4a | `model/lure_corpus.py` (3,643 synthetic EN / HI / Hinglish SMS), `model/lure_train.py` → `artifacts/lure.json` + `lure_vectors.json` | unseen templates: 84% scams caught, 0 false alarms (with the §12 Manjeet rule) |
-| M5 | `model/train.py` (LightGBM per family C/L/P/B + isotonic + logistic combiner), `model/predict.py` (`score(features)`, drop-in for `api/rule_scorer.score`), `model/evaluate.py`, `serve.py`, `artifacts/v0/server_model.json` (lgbm-0.1) | `test_predict.py`: Meena T3/T4, kirana T0, rule 1 (unknown never safer), p95 < 10 ms; held-out world below |
+| M5 | `model/train.py` (LightGBM per family C/L/P/B + isotonic + logistic combiner), `model/predict.py` (`score(features)`, drop-in for `api/rule_scorer.score`), `model/evaluate.py`, `serve.py`, `artifacts/v0/server_model.json` (lgbm-0.2: also reads the phone's verdict scores `device_c/l/b`, hidden on 30% of training rows so a request without a verdict is still judged on its raw signals) | `test_predict.py`: Meena T3/T4, kirana T0, rule 1 (unknown never safer), p95 < 10 ms; held-out world below |
+| M4b | `model/device/train.py` (3 small LightGBM families C/L/B on the phone-side features + isotonic + combiner + local warning), `model/device/score.py` (pure-Python JSON scorer), `model/device/verdict.py` (fraud class + level), `model/device/feature_vectors.py`, `artifacts/v0/device_model.json` (device-0.1, trained on `dev_device`) + `device_vectors.json` + `device_feature_vectors.json`; the Kotlin side now lives in the app (`android/.../signals/DeviceModel.kt`, `DeviceFeatures.kt`, `DeviceVerdict.kt`) | JSON == LightGBM to 1e-12 incl. all missing-value modes (`test_device_model.py`); Kotlin features, scores and verdicts equal Python's on 56 real payments and 13 verdict cases; held out: PR-AUC 0.980, local warning on 64% of scam payments, 0 per 1,000 legit |
+| M4c | Threat analysis (c2-0.8): the phone sends only its verdict (`context.device_verdict`: fraud class, level, C/L/B scores, reasons); the server adds intel, MuleHunter, FRI, the registry and the payment graph and answers `threat` (score 0-100, level, scam type, lit families); the app shows it | `backend/tests/test_threat.py`, `ContractTest`, `test_replay_parity.py` (replayed requests carry the verdict) |
+| M6 | `model/tune.py` -> `artifacts/v0/policy_proposal_rules-0.7.yaml`, `policy_proposal_lgbm-0.2.yaml` | tuned on `dev_calib`, checked on `dev_test` (below); `test_tune.py` |
 
-**lgbm-0.1 vs rules-0.6 on a held-out world** (`dev_test`, seed 12, never used in training; both through
-backend/api/policy.py; `ml/runs/evaluate_dev_test.json`):
+**On a held-out world** (`dev_test`, seed 12, never used in training; all through backend/api/policy.py
+with today's thresholds; `ml/runs/evaluate_dev_test.json`):
 
-| | rules-0.6 | lgbm-0.1 | deck target |
-|---|---|---|---|
-| Scam payments interrupted (T2+) | 82.1% | 94.7% | |
-| Scam rupees interrupted | 85.3% | 98.5% | |
-| Paused (T3+) | 61.9% | 93.9% | |
-| Caught at the journey's first payment | 80.8% | 92.1% | >= 70% |
-| Legit interruptions per 1,000 | 6.09 | 0.00 | <= 5 |
-| T3+ precision | 47.6% | 100% | >= 1 in 4 |
+| | rules-0.7 | lgbm-0.1 | lgbm-0.2 | lgbm-0.2, no phone sends a verdict | deck target |
+|---|---|---|---|---|---|
+| Scam payments interrupted (T2+) | 85.1% | 94.7% | 93.7% | 94.7% | |
+| Scam rupees interrupted | 90.5% | 98.5% | 98.3% | 98.5% | |
+| Paused (T3+) | 66.7% | 93.9% | 93.5% | 93.5% | |
+| Caught at the journey's first payment | 83.4% | 92.1% | 89.4% | 92.1% | >= 70% |
+| Legit interruptions per 1,000 | 6.09 | 0.00 | 0.00 | 0.00 | <= 5 |
+| T3+ precision | 49.5% | 100% | 100% | 100% | >= 1 in 4 |
+
+The phone's verdict adds nothing measurable here (on `dev_calib` too: 93.6% vs 94.1%), because in the
+simulator it is computed from the same readings the server already gets. On a real phone it also
+carries what never leaves it (the phone's own payment history, every lure hit, sub-threshold lures).
+Without verdict dropout, lgbm-0.2 gave Meena's digital arrest T0 when the request had no verdict.
 
 Read these with `data/eval/realism/FINDINGS.md` in mind: the simulated world is too easy (mule account
 age alone separates mules), so the ML numbers mostly show that the pipeline works end to end. They
-will drop when the world gets realistic; retrain with the same two commands then.
+will drop when the world gets realistic; retrain with the same commands then.
+
+**Threshold tuning** (`python -m model.tune`, legit interruptions <= 4 per 1,000, T3+ precision >= 1 in 4;
+tuned on `dev_calib`, checked on `dev_test`; `ml/runs/tune_dev_calib.json`):
+
+| Held-out world | T1/T2/T3 min_p | Scam rupees interrupted | Caught at 1st payment | Legit interruptions / 1,000 | T3+ precision |
+|---|---|---|---|---|---|
+| rules-0.7, today's policy.yaml | 0.30 / 0.50 / 0.75 | 90.5% | 83.4% | **6.09** (over the deck's 5) | 49.5% |
+| rules-0.7, proposed | 0.20 / 0.60 / 0.70 | 82.7% | 76.8% | **3.93** | 37.4% |
+| lgbm-0.2, today's policy.yaml | 0.30 / 0.50 / 0.75 | 98.3% | 89.4% | 0.00 | 100% |
+| lgbm-0.2, proposed | 0.20 / 0.30 / 0.50 | 98.4% | 92.1% | 0.00 | 100% |
+
+The API now runs lgbm-0.2 by default (`--scorer ml`), so today's thresholds already stay inside the
+alert budget; the rules proposal matters only when the engine falls back to rules. The lgbm-0.2 proposal
+only reflects how easy the world still is; re-tune on the realistic world before anyone adopts it.
 
 Model notes:
 - A family score is the family's likelihood ratio squashed as LR / (LR + 10): the family is lit (>= 0.5)
@@ -37,8 +59,9 @@ Model notes:
   payments from Rs 2,000; caller checks for incoming SIM calls from strangers). Unknown and "no finding"
   are both 0 for them (`model.data.POSITIVE_ONLY`), as in the rules engine. Without this, the payee model
   learned "not asked = safe" (40% of rows, up to 0.98 lower p_scam).
-- Reasons: the best reason of each lit family first, then the strongest remaining ones (max 4).
-- The playbook still comes from the rules engine's matcher (`api/rule_scorer._playbook`).
+- Reasons: taken in turns across lit families (strongest family first): each family's best reason, then each one's second best, and so on (max 4).
+- The playbook still comes from the rules engine's matcher (`api/rule_scorer._playbook`); when it finds
+  none, the phone's `fraud_class` names the scam (c2-0.8).
 
 Synthetic worlds come from `data/sim` (Nikunj; pay-screen sessions by Jagdeep). `ml/` only adds what
 the world does not say: which Scam Shield groups each phone has on (`dataset/assumptions.yaml`) and the
@@ -55,6 +78,10 @@ python -m model.experiments --table ml/data/tables/dev.parquet
 python -m model.train --table ml/data/tables/dev.parquet --out ml/model/artifacts/v0
 python -m model.evaluate --table ml/data/tables/dev_test.parquet   # a world the model never saw
 python -m serve --data data --port 8000 --demo-clock                # the engine with the ML scorer
+python -m dataset.worlds dev_device && python -m dataset.replay --data ml/data/worlds/dev_device --out ml/data/tables/dev_device.parquet
+python -m model.device.train --table ml/data/tables/dev_device.parquet --test ml/data/tables/dev_test.parquet
+python -m model.device.feature_vectors             # Kotlin parity cases; then copy device_model.json + lure.json to android assets
+python -m model.tune --table ml/data/tables/dev_calib.parquet --test ml/data/tables/dev_test.parquet
 python -m model.lure_corpus && python -m model.lure_train
 python -m pytest ml/tests
 ```
@@ -107,7 +134,6 @@ ml/
 │   ├── predict.py         score(features) -> same dict as api/rule_scorer.score
 │   ├── MODEL_CARD.md
 │   └── artifacts/         v0/, v1/ (committed, small JSON/text models)
-├── device_kotlin/         reference Kotlin scorer + parity test, for Manjeet to copy into android/
 ├── eval/                  metrics, ablation, fairness, red team, latency -> results.json
 ├── serve.py               runs the backend engine with the ML scorer (no backend edits)
 ├── data/                  generated worlds and tables (git ignored except lure_texts.csv)
@@ -206,7 +232,7 @@ like `api/rule_scorer.score`. `ml/serve.py` starts the backend app and sets
 `app.state.score = model.predict.score` (the swap point at `backend/api/main.py:79`).
 Budget: < 10 ms per score.
 
-## 6. On-device model (`model/device`, `device_kotlin/`)
+## 6. On-device model (`model/device`; Kotlin in `android/.../signals/`)
 
 ### 6.1 Parts
 | Part | Type | Output |
@@ -233,14 +259,16 @@ Budget: < 10 ms per score.
 - LightGBM `dump_model()` → compact JSON trees; logistic layers as weights. One file:
   `artifacts/v1/device_model.json` (target < 500 KB, < 20 ms on a mid-range phone).
 - `model/device/score_json.py` scores from the JSON only; it must equal the trained model.
-- `device_kotlin/DeviceModel.kt` + `device_vectors.json` (inputs → expected outputs). Python and
-  Kotlin must agree to 1e-6. Same for `lure.json` with `lure_vectors.json`.
+- `DeviceModel.kt` + `device_vectors.json`, `DeviceFeatures.kt` + `DeviceVerdict.kt` +
+  `device_feature_vectors.json` (readings → features → verdict). Python and Kotlin must agree to 1e-6. Same for `lure.json` with `lure_vectors.json`.
 - Lure vocabulary drops n-grams containing characters outside the Basic Multilingual Plane (emoji),
   which Kotlin's UTF-16 strings would split differently.
 
 ### 6.4 What the phone does with it
-Sends the device scores and reasons with the request (needs a contract change, §12). Shows gentle
-local warnings by itself, including offline. Never blocks a payment.
+Sends only its verdict with the request (`context.device_verdict`, c2-0.8): fraud class (rule order in
+`model/device/verdict.py`), level, the C/L/B family scores and up to 3 reasons. The server treats the
+scores as features of the same families, so the verdict can never light a family on its own. Shows
+gentle local warnings by itself, including offline. Never blocks a payment.
 
 ## 7. Pattern discovery (`model/discovery.py`)
 Sessions scored ≥ T1 (or reported later) that match no playbook → token sequences such as
@@ -310,7 +338,8 @@ positives, uniform normal life) covers most of what ML needs. In addition:
 
 **Jagdeep (backend):**
 1. Done: baselines use only earlier payments (372aa73), and `CLAUDE.md` now says so.
-2. **The tracker still misses WhatsApp/VoIP scam calls.** `features/tracker.py` counts contact only when
+2. Done in `feature/threat-analysis` (rules-0.7): an active VoIP call with unknown contact status counts as an
+   unknown caller in the tracker and R1. Was: **The tracker missed WhatsApp/VoIP scam calls.** `features/tracker.py` counts contact only when
    `caller_in_contacts is False`, and `rule_scorer` R1 needs `caller_unknown`. A real phone sends `null`
    for VoIP calls and outgoing SIM calls (ContextSensor never gets those numbers). In the replay, 29% of
    scam payments stay at stage S0. Treat an active VoIP call (or a call with unknown contact status) as
@@ -324,26 +353,21 @@ positives, uniform normal life) covers most of what ML needs. In addition:
    bait sender and every payer of the payee. Fine for a demo, but not at the deck's 3,000 decisions/s.
    `ml/dataset/graph.py` keeps heaps of expiry times and an index of completed payments, and gives
    identical results (`ml/tests/test_graph_expiry.py`); `account_signals` still needs an index.
-5. Contract: add optional `context.device_model = {version, c, l, b, p, reasons}` (bump version,
-   export, examples). In `features/build.py`, pass `device_c`, `device_l`, `device_b` and `device_p` into
-   the features (null when absent).
-6. `api/main.py`: choose the scorer with a flag (`--scorer rules|ml`), and make `/health` report the
-   active scorer's `model_version` (today it always reports the rule scorer's).
-7. `policy.yaml`: adopt the values from `tune.py`, and make T3 match the deck (3+ families, or a live
-   call + mule-like payee).
+5. Done in `feature/threat-analysis` (c2-0.8): `context.device_verdict`, `device_c/l/b` features, response
+   `threat`. Please review.
+6. Done in `feature/threat-analysis`: `--scorer ml|rules` (default ml, falls back to rules), `/health`
+   reports the active scorer.
+7. `policy.yaml`: `ml/model/artifacts/v0/policy_proposal_rules-0.7.yaml` (T1/T2/T3 = 0.20 / 0.60 / 0.70)
+   brings today's engine from 6.09 to 3.93 legit interruptions per 1,000 on a held-out world (deck: at most 5),
+   at about 10 points fewer scam rupees interrupted. Only the tier numbers change. The deck's T3 rule
+   (3+ families, or a live call + mule-like payee) still differs from `policy.yaml` (2 families); that is a
+   product call, not a tuning one.
 
-**Manjeet (android):**
-1. Copy `ml/model/artifacts/lure.json` to `app/src/main/assets/lure.json` (18,824 n-grams, 1.5 MB).
-2. `LinearLureClassifier.classify`: return the most likely **scam** tag with confidence
-   `1 - P(normal)` (and `normal` when `P(normal)` is larger). On unseen phrasings this catches 84% of
-   scam SMS vs 53% with the top-class rule, with 0 false alarms either way.
-3. `charWbNgrams`: split on Unicode whitespace, `Regex("(?U)\\s+")`, as scikit-learn does (a no-break
-   space must split words).
-4. Unit test: score every text in `ml/model/artifacts/lure_vectors.json`. `probs` must match to 1e-6,
-   and `tag` / `scam_tag` must match exactly.
-5. Later (M4b): `device_model.json` + `DeviceModel.kt`, and the private device features in
-   `ml/dataset/device_features.py` (own-history stats; the session numbers are already measured).
-   Then send `context.device_model`.
+**Manjeet (android):** items 1-5 of the old list (lure.json asset, scam-tag rule, Unicode split, lure
+vectors test, on-device model) are done in `feature/threat-analysis`, plus the device features, the
+verdict in the request and the threat on the decision screen. Please review, and run
+`gradlew assembleDebug testDebugUnitTest`: the pure-Kotlin parts were compiled and tested here, but
+`Signals.kt`, `RukoApp.kt`, `PaymentViewModel.kt` and `DecisionScreen.kt` need the Android SDK.
 
 **Deck wording:** slide 4 says Meena is "on a WhatsApp call ... with a number not in her contacts".
 The phone cannot know that for a WhatsApp call. It knows that a VoIP call is active and how long it

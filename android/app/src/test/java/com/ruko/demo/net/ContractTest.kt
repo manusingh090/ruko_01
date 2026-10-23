@@ -88,6 +88,31 @@ class ContractTest {
     }
 
     @Test
+    fun deviceVerdictRequestRoundTripsExactly() {
+        val original = Json.parseToJsonElement(example("decide_request_device_verdict.json"))
+        val decoded = RukoJson.decodeFromString(DecideRequest.serializer(), original.toString())
+        val encoded = RukoJson.parseToJsonElement(RukoJson.encodeToString(DecideRequest.serializer(), decoded))
+        assertEquals(normalise(original), normalise(encoded))
+        val verdictDef = defs.getValue("DeviceVerdict").jsonObject
+        assertFieldsAllowed(encoded.jsonObject.getValue("context").jsonObject.getValue("device_verdict").jsonObject, verdictDef)
+        assertEquals(setOf("low", "medium", "high"), enumValues(verdictDef.getValue("properties").jsonObject.getValue("level")))
+        val classes = enumValues(verdictDef.getValue("properties").jsonObject.getValue("fraud_class"))
+        assertTrue(decoded.context!!.deviceVerdict!!.fraudClass in classes)
+    }
+
+    @Test
+    fun threatAnalysisMatchesTheResponseSchema() {
+        val response = schema.getValue("response").jsonObject
+        val threatDef = response.getValue("\$defs").jsonObject.getValue("Threat").jsonObject
+        val decoded = RukoJson.decodeFromString(DecideResponse.serializer(), example("decide_response_t3.json"))
+        val threat = decoded.threat!!
+        assertEquals(91, threat.score)
+        assertFieldsAllowed(RukoJson.encodeToJsonElement(Threat.serializer(), threat).jsonObject, threatDef)
+        assertTrue(threat.level in enumValues(threatDef.getValue("properties").jsonObject.getValue("level")))
+        assertEquals(null, RukoJson.decodeFromString(DecideResponse.serializer(), example("decide_response_fail_open.json")).threat)
+    }
+
+    @Test
     fun builtRequestUsesOnlySchemaFieldsAndHasTheRequiredOnes() {
         val built = RequestBuilder.build(
             userId = "u_demo_meena",
